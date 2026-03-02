@@ -63,6 +63,26 @@ function loadIdentity(mspId) {
 function buildConnectionProfile(mspId) {
   const org = ORGS[mspId];
 
+  // Build all peers for endorsement
+  const allPeers = {};
+  const channelPeers = {};
+
+  Object.values(ORGS).forEach(o => {
+    allPeers[o.peer] = {
+      url: `grpc://${o.peerAddress}`,
+      grpcOptions: {
+        'ssl-target-name-override': o.peer,
+        hostnameOverride: o.peer,
+      },
+    };
+    channelPeers[o.peer] = {
+      endorsingPeer: true,
+      chaincodeQuery: true,
+      ledgerQuery: true,
+      eventSource: true,
+    };
+  });
+
   return {
     name: 'beer-network',
     version: '1.0.0',
@@ -76,15 +96,7 @@ function buildConnectionProfile(mspId) {
         peers: [org.peer],
       },
     },
-    peers: {
-      [org.peer]: {
-        url: `grpc://${org.peerAddress}`,
-        grpcOptions: {
-          'ssl-target-name-override': org.peer,
-          hostnameOverride: org.peer,
-        },
-      },
-    },
+    peers: allPeers,
     orderers: {
       'orderer.example.com': {
         url: 'grpc://localhost:7050',
@@ -93,14 +105,7 @@ function buildConnectionProfile(mspId) {
     channels: {
       [CHANNEL]: {
         orderers: ['orderer.example.com'],
-        peers: {
-          [org.peer]: {
-            endorsingPeer: true,
-            chaincodeQuery: true,
-            ledgerQuery: true,
-            eventSource: true,
-          },
-        },
+        peers: channelPeers,
       },
     },
   };

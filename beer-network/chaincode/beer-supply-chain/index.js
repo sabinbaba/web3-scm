@@ -82,6 +82,15 @@ class BeerSupplyChain extends Contract {
     }
   }
 
+  _parseUser(userJson) {
+    if (!userJson || userJson === '{}' || userJson === '') return null;
+    try {
+      return JSON.parse(userJson);
+    } catch (e) {
+      return null;
+    }
+  }
+
   async InitLedger(ctx) {
     console.log('BeerSupplyChain initialized');
     return JSON.stringify({ success: true });
@@ -134,7 +143,7 @@ class BeerSupplyChain extends Contract {
     return JSON.stringify(results);
   }
 
-  async CreateBeerBatch(ctx, batchId, beerType, quantity, manufacturerId, productionDate, expirationDate, ingredients) {
+  async CreateBeerBatch(ctx, batchId, beerType, quantity, manufacturerId, productionDate, expirationDate, ingredients, performedByJson) {
     const role = this._getRole(ctx);
     if (role !== ROLES.MANUFACTURER) {
       throw new Error(`Only Manufacturer can create batches. Your role: ${role}`);
@@ -167,7 +176,9 @@ class BeerSupplyChain extends Contract {
       }
     }
 
+    const performedBy = this._parseUser(performedByJson);
     const now = getTxTimestamp(ctx);
+
     const batch = {
       docType:         'beerBatch',
       batchId,
@@ -182,12 +193,19 @@ class BeerSupplyChain extends Contract {
       currentOwnerId:  manufacturerId,
       status:          'PRODUCED',
       salesHistory:    [],
-      createdAt:       now,
-      updatedAt:       now,
+      actionHistory:   [{
+        action:      'CREATED',
+        performedBy: performedBy,
+        mspId:       this._getMSP(ctx),
+        timestamp:   now,
+        txId:        ctx.stub.getTxID(),
+      }],
+      createdAt:  now,
+      updatedAt:  now,
     };
 
     await this._putState(ctx, key, batch);
-    ctx.stub.setEvent('BatchCreated', Buffer.from(JSON.stringify({ batchId, beerType, quantity: qty })));
+    ctx.stub.setEvent('BatchCreated', Buffer.from(JSON.stringify({ batchId, beerType, quantity: qty, performedBy })));
     return JSON.stringify(batch);
   }
 
@@ -211,7 +229,7 @@ class BeerSupplyChain extends Contract {
     return JSON.stringify(all.filter(b => b.mspId === msp));
   }
 
-  async TransferBatch(ctx, batchId, toParticipantId) {
+  async TransferBatch(ctx, batchId, toParticipantId, performedByJson) {
     this._require(batchId,         'batchId');
     this._require(toParticipantId, 'toParticipantId');
 
@@ -239,18 +257,34 @@ class BeerSupplyChain extends Contract {
       throw new Error(`Distributor can only transfer to Retailer`);
     }
 
+    const performedBy = this._parseUser(performedByJson);
+    const now = getTxTimestamp(ctx);
+
+    // Add to action history
+    if (!batch.actionHistory) batch.actionHistory = [];
+    batch.actionHistory.push({
+      action:      'TRANSFERRED',
+      from:        batch.currentOwnerId,
+      fromMspId:   msp,
+      to:          toParticipantId,
+      toMspId:     toPart.mspId,
+      performedBy: performedBy,
+      timestamp:   now,
+      txId:        ctx.stub.getTxID(),
+    });
+
     batch.currentOwnerId  = toParticipantId;
     batch.mspId           = toPart.mspId;
     batch.currentLocation = toPart.role.toUpperCase();
     batch.status          = 'IN_TRANSIT';
-    batch.updatedAt       = getTxTimestamp(ctx);
+    batch.updatedAt       = now;
 
     await this._putState(ctx, key, batch);
-    ctx.stub.setEvent('BatchTransferred', Buffer.from(JSON.stringify({ batchId, toParticipantId })));
+    ctx.stub.setEvent('BatchTransferred', Buffer.from(JSON.stringify({ batchId, toParticipantId, performedBy })));
     return JSON.stringify(batch);
   }
 
-  async RecordSale(ctx, batchId, quantitySold, saleInfo) {
+  async RecordSale(ctx, batchId, quantitySold, saleInfo, performedByJson) {
     this._require(batchId,      'batchId');
     this._require(quantitySold, 'quantitySold');
 
@@ -275,18 +309,33 @@ class BeerSupplyChain extends Contract {
       try { parsedSaleInfo = JSON.parse(saleInfo); } catch (e) {}
     }
 
+    const performedBy = this._parseUser(performedByJson);
+    const now = getTxTimestamp(ctx);
+
     batch.quantity  -= qty;
     batch.status     = batch.quantity === 0 ? 'SOLD_OUT' : 'PARTIALLY_SOLD';
-    batch.updatedAt  = getTxTimestamp(ctx);
+    batch.updatedAt  = now;
     batch.salesHistory.push({
       quantitySold: qty,
-      soldAt:       getTxTimestamp(ctx),
+      soldAt:       now,
       retailerId:   batch.currentOwnerId,
+      performedBy:  performedBy,
+      txId:         ctx.stub.getTxID(),
       ...parsedSaleInfo,
     });
 
+    if (!batch.actionHistory) batch.actionHistory = [];
+    batch.actionHistory.push({
+      action:      'SALE_RECORDED',
+      quantitySold: qty,
+      performedBy:  performedBy,
+      mspId:        msp,
+      timestamp:    now,
+      txId:         ctx.stub.getTxID(),
+    });
+
     await this._putState(ctx, key, batch);
-    ctx.stub.setEvent('BatchSaleRecorded', Buffer.from(JSON.stringify({ batchId, quantitySold: qty })));
+    ctx.stub.setEvent('BatchSaleRecorded', Buffer.from(JSON.stringify({ batchId, quantitySold: qty, performedBy })));
     return JSON.stringify(batch);
   }
 
