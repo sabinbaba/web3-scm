@@ -1,0 +1,201 @@
+Organizations:
+  - &OrdererOrg
+    Name: OrdererMSP
+    ID: OrdererMSP
+    MSPDir: organizations/ordererOrganizations/example.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OrdererMSP.admin')"
+      BlockValidation:
+        Type: Signature
+        Rule: "OR('OrdererMSP.orderer')"
+
+  - &Supplier
+    Name: SupplierMSP
+    ID: SupplierMSP
+    MSPDir: organizations/peerOrganizations/supplier.example.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('SupplierMSP.admin','SupplierMSP.peer','SupplierMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('SupplierMSP.admin','SupplierMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('SupplierMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('SupplierMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.supplier.example.com
+        Port: 7051
+
+  - &Manufacturer
+    Name: ManufacturerMSP
+    ID: ManufacturerMSP
+    MSPDir: organizations/peerOrganizations/manufacturer.example.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('ManufacturerMSP.admin','ManufacturerMSP.peer','ManufacturerMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('ManufacturerMSP.admin','ManufacturerMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('ManufacturerMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('ManufacturerMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.manufacturer.example.com
+        Port: 8051
+
+  - &Distributor
+    Name: DistributorMSP
+    ID: DistributorMSP
+    MSPDir: organizations/peerOrganizations/distributor.example.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('DistributorMSP.admin','DistributorMSP.peer','DistributorMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('DistributorMSP.admin','DistributorMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('DistributorMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('DistributorMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.distributor.example.com
+        Port: 9051
+
+  - &Retailer
+    Name: RetailerMSP
+    ID: RetailerMSP
+    MSPDir: organizations/peerOrganizations/retailer.example.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('RetailerMSP.admin','RetailerMSP.peer','RetailerMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('RetailerMSP.admin','RetailerMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('RetailerMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('RetailerMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.retailer.example.com
+        Port: 10051
+
+Capabilities:
+  Channel: &ChannelCapabilities
+    V2_0: true
+  Orderer: &OrdererCapabilities
+    V2_0: true
+  Application: &ApplicationCapabilities
+    V2_0: true
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+  OrdererType: solo
+  Addresses:
+    - orderer.example.com:7050
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 10
+    AbsoluteMaxBytes: 99 MB
+    PreferredMaxBytes: 512 KB
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+  Capabilities:
+    <<: *OrdererCapabilities
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Profiles:
+  BeerOrdererGenesis:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities:
+        <<: *OrdererCapabilities
+    Consortiums:
+      BeerConsortium:
+        Organizations:
+          - *Supplier
+          - *Manufacturer
+          - *Distributor
+          - *Retailer
+
+  BeerChannel:
+    Consortium: BeerConsortium
+    <<: *ChannelDefaults
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *Supplier
+        - *Manufacturer
+        - *Distributor
+        - *Retailer
+      Capabilities:
+        <<: *ApplicationCapabilities
