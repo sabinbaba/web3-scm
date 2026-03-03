@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getBatches, createBatch, transferBatch, recordSale, getParticipants, getBatchHistory } from '../services/api';
 import toast from 'react-hot-toast';
-import { Plus, ArrowRight, ShoppingCart, History, X } from 'lucide-react';
+import { Plus, ArrowRight, ShoppingCart, History, X, Trash2 } from 'lucide-react';
 
 const STATUS_COLORS = {
   PRODUCED:       'bg-blue-100 text-blue-700',
@@ -10,6 +10,28 @@ const STATUS_COLORS = {
   PARTIALLY_SOLD: 'bg-orange-100 text-orange-700',
   SOLD_OUT:       'bg-gray-100 text-gray-500',
 };
+
+const BEER_TYPES = [
+  'Primus Lager',
+  'Mutzig',
+  'Heineken',
+  'Turbo King',
+  'Guinness',
+  'Amstel',
+  'Bralirwa Special',
+  'Other',
+];
+
+const INGREDIENT_OPTIONS = [
+  'Hops',
+  'Barley',
+  'Water',
+  'Yeast',
+  'Malt',
+  'Wheat',
+  'Sugar',
+  'Carbon Dioxide',
+];
 
 export default function Batches() {
   const { user } = useAuth();
@@ -25,9 +47,20 @@ export default function Batches() {
   const [submitting, setSubmitting] = useState(false);
 
   const [createForm, setCreateForm] = useState({
-    batchId: '', beerType: '', quantity: '', manufacturerId: '',
-    productionDate: '', expirationDate: '', ingredients: ''
+    batchId: '',
+    beerType: '',
+    customBeerType: '',
+    quantity: '',
+    manufacturerId: '',
+    productionDate: '',
+    expirationDate: '',
   });
+
+  // Ingredients as array of {name, amount, unit}
+  const [ingredients, setIngredients] = useState([
+    { name: 'Hops', amount: '', unit: 'kg' },
+  ]);
+
   const [transferTo, setTransferTo] = useState('');
   const [saleQty, setSaleQty] = useState('');
 
@@ -45,19 +78,48 @@ export default function Batches() {
 
   useEffect(() => { fetchData(); }, []);
 
+  const addIngredient = () => {
+    setIngredients([...ingredients, { name: 'Barley', amount: '', unit: 'kg' }]);
+  };
+
+  const removeIngredient = (index) => {
+    setIngredients(ingredients.filter((_, i) => i !== index));
+  };
+
+  const updateIngredient = (index, field, value) => {
+    const updated = [...ingredients];
+    updated[index][field] = value;
+    setIngredients(updated);
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      let ingredients = {};
-      if (createForm.ingredients) {
-        try { ingredients = JSON.parse(createForm.ingredients); }
-        catch { toast.error('Ingredients must be valid JSON'); setSubmitting(false); return; }
-      }
-      await createBatch({ ...createForm, quantity: parseInt(createForm.quantity), ingredients });
+      // Build ingredients object from array
+      const ingredientsObj = {};
+      ingredients.forEach(ing => {
+        if (ing.name && ing.amount) {
+          ingredientsObj[ing.name.toLowerCase()] = `${ing.amount}${ing.unit}`;
+        }
+      });
+
+      const beerType = createForm.beerType === 'Other' ? createForm.customBeerType : createForm.beerType;
+
+      await createBatch({
+        batchId: createForm.batchId,
+        beerType,
+        quantity: parseInt(createForm.quantity),
+        manufacturerId: createForm.manufacturerId,
+        productionDate: createForm.productionDate,
+        expirationDate: createForm.expirationDate,
+        ingredients: ingredientsObj,
+      });
+
       toast.success('Batch created on blockchain!');
       setShowCreateModal(false);
-      setCreateForm({ batchId: '', beerType: '', quantity: '', manufacturerId: '', productionDate: '', expirationDate: '', ingredients: '' });
+      setCreateForm({ batchId: '', beerType: '', customBeerType: '', quantity: '', manufacturerId: '', productionDate: '', expirationDate: '' });
+      setIngredients([{ name: 'Hops', amount: '', unit: 'kg' }]);
       fetchData();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to create batch');
@@ -109,7 +171,9 @@ export default function Batches() {
     }
   };
 
-  // Filter participants based on role for transfer
+  // Manufacturer participants for dropdown
+  const manufacturerParticipants = participants.filter(p => p.role === 'manufacturer');
+
   const transferTargets = participants.filter(p => {
     if (user.role === 'manufacturer') return p.role === 'distributor';
     if (user.role === 'distributor') return p.role === 'retailer';
@@ -174,7 +238,6 @@ export default function Batches() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      {/* Transfer button */}
                       {(user.role === 'manufacturer' || user.role === 'distributor') &&
                         batch.mspId === user.mspId && batch.status !== 'SOLD_OUT' && (
                         <button
@@ -185,7 +248,6 @@ export default function Batches() {
                           <ArrowRight size={16} />
                         </button>
                       )}
-                      {/* Sale button */}
                       {user.role === 'retailer' && batch.mspId === user.mspId && batch.status !== 'SOLD_OUT' && (
                         <button
                           onClick={() => { setSelectedBatch(batch); setShowSaleModal(true); }}
@@ -195,7 +257,6 @@ export default function Batches() {
                           <ShoppingCart size={16} />
                         </button>
                       )}
-                      {/* History button */}
                       <button
                         onClick={() => handleHistory(batch)}
                         className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"
@@ -212,60 +273,183 @@ export default function Batches() {
         </div>
       </div>
 
-      {/* Create Modal */}
+      {/* ── CREATE MODAL ── */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
               <h2 className="font-semibold text-gray-800">Create New Batch</h2>
               <button onClick={() => setShowCreateModal(false)}><X size={20} /></button>
             </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              {[
-                { label: 'Batch ID', key: 'batchId', placeholder: 'BATCH003' },
-                { label: 'Beer Type', key: 'beerType', placeholder: 'Primus Lager' },
-                { label: 'Quantity', key: 'quantity', placeholder: '1000', type: 'number' },
-                { label: 'Manufacturer ID', key: 'manufacturerId', placeholder: 'MFG001' },
-                { label: 'Production Date', key: 'productionDate', type: 'date' },
-                { label: 'Expiration Date', key: 'expirationDate', type: 'date' },
-              ].map(({ label, key, placeholder, type }) => (
-                <div key={key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+            <form onSubmit={handleCreate} className="p-6 space-y-5">
+
+              {/* Batch ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Batch ID</label>
+                <input
+                  type="text"
+                  value={createForm.batchId}
+                  onChange={e => setCreateForm({ ...createForm, batchId: e.target.value })}
+                  placeholder="e.g. BATCH004"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+
+              {/* Beer Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Beer Type</label>
+                <select
+                  value={createForm.beerType}
+                  onChange={e => setCreateForm({ ...createForm, beerType: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="">Select beer type</option>
+                  {BEER_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+                {createForm.beerType === 'Other' && (
                   <input
-                    type={type || 'text'}
-                    value={createForm[key]}
-                    onChange={e => setCreateForm({ ...createForm, [key]: e.target.value })}
-                    placeholder={placeholder}
+                    type="text"
+                    value={createForm.customBeerType}
+                    onChange={e => setCreateForm({ ...createForm, customBeerType: e.target.value })}
+                    placeholder="Enter beer type name"
+                    required
+                    className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                )}
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity (units)</label>
+                <input
+                  type="number"
+                  value={createForm.quantity}
+                  onChange={e => setCreateForm({ ...createForm, quantity: e.target.value })}
+                  placeholder="e.g. 1000"
+                  min="1"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+
+              {/* Manufacturer */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Manufacturer</label>
+                <select
+                  value={createForm.manufacturerId}
+                  onChange={e => setCreateForm({ ...createForm, manufacturerId: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="">Select manufacturer</option>
+                  {manufacturerParticipants.map(p => (
+                    <option key={p.participantId} value={p.participantId}>
+                      {p.name} ({p.participantId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Production Date</label>
+                  <input
+                    type="date"
+                    value={createForm.productionDate}
+                    onChange={e => setCreateForm({ ...createForm, productionDate: e.target.value })}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                   />
                 </div>
-              ))}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ingredients (JSON)
-                </label>
-                <textarea
-                  value={createForm.ingredients}
-                  onChange={e => setCreateForm({ ...createForm, ingredients: e.target.value })}
-                  placeholder='{"hops":"100kg","barley":"500kg"}'
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Expiration Date</label>
+                  <input
+                    type="date"
+                    value={createForm.expirationDate}
+                    onChange={e => setCreateForm({ ...createForm, expirationDate: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
               </div>
+
+              {/* Ingredients Builder */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Ingredients</label>
+                  <button
+                    type="button"
+                    onClick={addIngredient}
+                    className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1"
+                  >
+                    <Plus size={12} /> Add Ingredient
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {ingredients.map((ing, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2">
+                      {/* Ingredient name */}
+                      <select
+                        value={ing.name}
+                        onChange={e => updateIngredient(i, 'name', e.target.value)}
+                        className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      >
+                        {INGREDIENT_OPTIONS.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                      {/* Amount */}
+                      <input
+                        type="number"
+                        value={ing.amount}
+                        onChange={e => updateIngredient(i, 'amount', e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        className="w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      />
+                      {/* Unit */}
+                      <select
+                        value={ing.unit}
+                        onChange={e => updateIngredient(i, 'unit', e.target.value)}
+                        className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="L">L</option>
+                        <option value="mL">mL</option>
+                        <option value="ton">ton</option>
+                      </select>
+                      {/* Remove */}
+                      {ingredients.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeIngredient(i)}
+                          className="text-red-400 hover:text-red-600 p-1"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={submitting}
                 className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg font-medium transition disabled:opacity-50"
               >
-                {submitting ? 'Creating...' : 'Create Batch'}
+                {submitting ? 'Creating on Blockchain...' : '🍺 Create Batch'}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Transfer Modal */}
+      {/* ── TRANSFER MODAL ── */}
       {showTransferModal && selectedBatch && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -274,9 +458,10 @@ export default function Batches() {
               <button onClick={() => setShowTransferModal(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleTransfer} className="p-6 space-y-4">
-              <p className="text-sm text-gray-500">
-                Transferring: <span className="font-medium text-amber-600">{selectedBatch.batchId}</span>
-              </p>
+              <div className="bg-amber-50 rounded-lg p-3">
+                <p className="text-sm font-medium text-amber-700">{selectedBatch.batchId}</p>
+                <p className="text-sm text-amber-600">{selectedBatch.beerType} — {selectedBatch.quantity} units</p>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Transfer To</label>
                 <select
@@ -305,7 +490,7 @@ export default function Batches() {
         </div>
       )}
 
-      {/* Sale Modal */}
+      {/* ── SALE MODAL ── */}
       {showSaleModal && selectedBatch && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -314,10 +499,11 @@ export default function Batches() {
               <button onClick={() => setShowSaleModal(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleSale} className="p-6 space-y-4">
-              <p className="text-sm text-gray-500">
-                Batch: <span className="font-medium text-amber-600">{selectedBatch.batchId}</span>
-                <span className="ml-2 text-gray-400">(Available: {selectedBatch.quantity})</span>
-              </p>
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-sm font-medium text-green-700">{selectedBatch.batchId}</p>
+                <p className="text-sm text-green-600">{selectedBatch.beerType}</p>
+                <p className="text-xs text-green-500 mt-1">Available: {selectedBatch.quantity} units</p>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Sold</label>
                 <input
@@ -342,14 +528,12 @@ export default function Batches() {
         </div>
       )}
 
-      {/* History Modal */}
+      {/* ── HISTORY MODAL ── */}
       {showHistoryModal && selectedBatch && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="font-semibold text-gray-800">
-                History: {selectedBatch.batchId}
-              </h2>
+            <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
+              <h2 className="font-semibold text-gray-800">History: {selectedBatch.batchId}</h2>
               <button onClick={() => setShowHistoryModal(false)}><X size={20} /></button>
             </div>
             <div className="p-6 space-y-4">
@@ -381,23 +565,21 @@ export default function Batches() {
                         </p>
                       )}
                       {action.from && (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 mt-1">
                           From: <span className="font-medium">{action.from}</span>
-                          → To: <span className="font-medium">{action.to}</span>
+                          {' → '}
+                          To: <span className="font-medium">{action.to}</span>
                         </p>
                       )}
                     </div>
                   ))}
-                  <p className="text-xs text-gray-400 mt-2 truncate">
-                    TxID: {record.txId}
-                  </p>
+                  <p className="text-xs text-gray-400 mt-2 truncate">TxID: {record.txId}</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
