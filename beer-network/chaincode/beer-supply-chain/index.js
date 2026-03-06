@@ -243,8 +243,9 @@ class BeerSupplyChain extends Contract {
     const key   = this._batchKey(ctx, batchId);
     const batch = await this._getState(ctx, key, 'Beer batch');
 
-    if (batch.mspId !== msp) {
-      throw new Error(`Batch '${batchId}' does not belong to your organization`);
+    const callerRole = MSP_ROLE_MAP[msp];
+    if (batch.currentLocation !== callerRole.toUpperCase()) {
+      throw new Error(`Batch '${batchId}' is not at your location. Current location: ${batch.currentLocation}`);
     }
 
     const toKey  = this._participantKey(ctx, toParticipantId);
@@ -301,7 +302,7 @@ class BeerSupplyChain extends Contract {
     const key   = this._batchKey(ctx, batchId);
     const batch = await this._getState(ctx, key, 'Beer batch');
 
-    if (batch.mspId !== msp) throw new Error(`Batch '${batchId}' does not belong to your organization`);
+    if (batch.currentLocation !== 'RETAILER') throw new Error(`Batch '${batchId}' is not at your location. Current location: ${batch.currentLocation}`);
     if (batch.quantity < qty) throw new Error(`Insufficient stock: available ${batch.quantity}, requested ${qty}`);
 
     let parsedSaleInfo = {};
@@ -372,7 +373,7 @@ class BeerSupplyChain extends Contract {
     const key   = this._batchKey(ctx, batchId);
     const batch = await this._getState(ctx, key, 'Beer batch');
 
-    if (batch.mspId !== msp) throw new Error(`Batch '${batchId}' does not belong to your organization`);
+    if (batch.currentLocation !== MSP_ROLE_MAP[msp].toUpperCase()) throw new Error(`Batch '${batchId}' does not belong to your organization`);
 
     let parsedUpdates;
     try { parsedUpdates = JSON.parse(updates); } catch (e) {

@@ -11,6 +11,23 @@ const STATUS_COLORS = {
   SOLD_OUT:       'bg-gray-100 text-gray-500',
 };
 
+function formatDateTime(dateStr) {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((new Date() - new Date(dateStr)) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 const ROLE_COLORS = {
   supplier:     'bg-green-100 text-green-700',
   manufacturer: 'bg-blue-100 text-blue-700',
@@ -64,7 +81,7 @@ export default function Transfers() {
 
   // Only show batches owned by current org that can be transferred
   const myBatches = batches.filter(b =>
-    b.mspId === user.mspId && b.status !== 'SOLD_OUT'
+    b.currentLocation === user.role.toUpperCase() && b.status !== 'SOLD_OUT'
   );
 
   // All transfer actions across all batches
@@ -176,9 +193,10 @@ export default function Transfers() {
                     <div className="bg-gray-50 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-semibold text-amber-600">{transfer.batchId}</span>
-                        <span className="text-xs text-gray-400">
-                          {transfer.timestamp ? new Date(transfer.timestamp).toLocaleString() : '-'}
-                        </span>
+                        <div>
+                          <p className="text-xs text-gray-600">{formatDateTime(transfer.timestamp)}</p>
+                          <p className="text-xs text-gray-400">{timeAgo(transfer.timestamp)}</p>
+                        </div>
                       </div>
                       <p className="text-sm text-gray-600 mb-3">{transfer.beerType}</p>
 

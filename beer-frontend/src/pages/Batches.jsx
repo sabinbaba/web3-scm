@@ -4,6 +4,23 @@ import { getBatches, createBatch, transferBatch, recordSale, getParticipants, ge
 import toast from 'react-hot-toast';
 import { Plus, ArrowRight, ShoppingCart, History, X, Trash2 } from 'lucide-react';
 
+function formatDateTime(dateStr) {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((new Date() - new Date(dateStr)) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 const STATUS_COLORS = {
   PRODUCED:       'bg-blue-100 text-blue-700',
   IN_TRANSIT:     'bg-yellow-100 text-yellow-700',
@@ -215,6 +232,8 @@ export default function Batches() {
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Quantity</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Location</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Created At</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Created At</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Created By</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
@@ -233,13 +252,17 @@ export default function Batches() {
                       {batch.status}
                     </span>
                   </td>
+                  <td className="px-6 py-4">
+                    <p className="text-xs text-gray-600">{formatDateTime(batch.createdAt)}</p>
+                    <p className="text-xs text-gray-400">{timeAgo(batch.createdAt)}</p>
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {batch.actionHistory?.[0]?.performedBy?.name || '-'}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       {(user.role === 'manufacturer' || user.role === 'distributor') &&
-                        batch.mspId === user.mspId && batch.status !== 'SOLD_OUT' && (
+                        batch.currentLocation === user.role.toUpperCase() && batch.status !== 'SOLD_OUT' && (
                         <button
                           onClick={() => { setSelectedBatch(batch); setShowTransferModal(true); }}
                           className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition"
@@ -248,7 +271,7 @@ export default function Batches() {
                           <ArrowRight size={16} />
                         </button>
                       )}
-                      {user.role === 'retailer' && batch.mspId === user.mspId && batch.status !== 'SOLD_OUT' && (
+                      {user.role === 'retailer' && batch.currentLocation === 'RETAILER' && batch.status !== 'SOLD_OUT' && (
                         <button
                           onClick={() => { setSelectedBatch(batch); setShowSaleModal(true); }}
                           className="p-1.5 text-green-500 hover:bg-green-50 rounded-lg transition"
@@ -545,7 +568,7 @@ export default function Batches() {
                     <span className="text-xs font-medium text-gray-500">TX {i + 1}</span>
                     <span className="text-xs text-gray-400">
                       {record.timestamp?.seconds
-                        ? new Date(record.timestamp.seconds * 1000).toLocaleString()
+                        ? formatDateTime(new Date(record.timestamp.seconds * 1000).toISOString())
                         : '-'}
                     </span>
                   </div>
