@@ -73,6 +73,17 @@ export default function Batches() {
     expirationDate: '',
   });
 
+  // Auto-generate next batch IDs based on existing batches
+  const generateNextBatchIds = (existingBatches, count = 10) => {
+    const nums = existingBatches
+      .map(b => parseInt(b.batchId.replace(/\D/g, '')))
+      .filter(n => !isNaN(n));
+    const max = nums.length > 0 ? Math.max(...nums) : 0;
+    return Array.from({ length: count }, (_, i) =>
+      `BATCH${String(max + i + 1).padStart(3, '0')}`
+    );
+  };
+
   // Ingredients as array of {name, amount, unit}
   const [ingredients, setIngredients] = useState([
     { name: 'Hops', amount: '', unit: 'kg' },
@@ -139,7 +150,14 @@ export default function Batches() {
       setIngredients([{ name: 'Hops', amount: '', unit: 'kg' }]);
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to create batch');
+      const raw = err.response?.data?.error || '';
+      if (raw.includes('already exists')) {
+        toast.error('❌ Batch ID already exists! Please select a different ID.', { duration: 4000 });
+      } else if (raw.includes('not found')) {
+        toast.error('❌ Manufacturer not found. Please register the manufacturer first.', { duration: 4000 });
+      } else {
+        toast.error(raw || 'Failed to create batch. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -155,7 +173,21 @@ export default function Batches() {
       setTransferTo('');
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to transfer batch');
+      const raw = err.response?.data?.error || '';
+      if (raw.includes('District mismatch')) {
+        const match = raw.match(/Distributor is in '(.+?)' but Retailer is in '(.+?)'/);
+        if (match) {
+          toast.error(`❌ District mismatch! Your district is ${match[1]} but this retailer is in ${match[2]}. You can only transfer to retailers in your district.`, { duration: 5000 });
+        } else {
+          toast.error('❌ District mismatch! You can only transfer to retailers in your district.', { duration: 5000 });
+        }
+      } else if (raw.includes('not at your location')) {
+        toast.error('❌ This batch is not at your location.', { duration: 4000 });
+      } else if (raw.includes('already exists')) {
+        toast.error('❌ This batch ID already exists. Please choose another.', { duration: 4000 });
+      } else {
+        toast.error(raw || 'Transfer failed. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -171,7 +203,14 @@ export default function Batches() {
       setSaleQty('');
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to record sale');
+      const raw = err.response?.data?.error || '';
+      if (raw.includes('Insufficient stock')) {
+        toast.error('❌ Insufficient stock! You cannot sell more than available quantity.', { duration: 4000 });
+      } else if (raw.includes('not at your location')) {
+        toast.error('❌ This batch is not at your location.', { duration: 4000 });
+      } else {
+        toast.error(raw || 'Failed to record sale. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -193,7 +232,16 @@ export default function Batches() {
 
   const transferTargets = participants.filter(p => {
     if (user.role === 'manufacturer') return p.role === 'distributor';
-    if (user.role === 'distributor') return p.role === 'retailer';
+    if (user.role === 'distributor') {
+      if (p.role !== 'retailer') return false;
+      if (user.participantId) {
+        const myParticipant = participants.find(pt => pt.participantId === user.participantId);
+        if (myParticipant?.district && p.district) {
+          return myParticipant.district === p.district;
+        }
+      }
+      return true;
+    }
     return false;
   });
 
@@ -309,14 +357,18 @@ export default function Batches() {
               {/* Batch ID */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Batch ID</label>
-                <input
-                  type="text"
+                <select
                   value={createForm.batchId}
                   onChange={e => setCreateForm({ ...createForm, batchId: e.target.value })}
-                  placeholder="e.g. BATCH004"
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
+                >
+                  <option value="">Select Batch ID</option>
+                  {generateNextBatchIds(batches).map(id => (
+                    <option key={id} value={id}>{id}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Auto-generated based on existing batches</p>
               </div>
 
               {/* Beer Type */}

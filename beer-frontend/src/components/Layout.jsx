@@ -10,6 +10,7 @@ import {
   Menu,
   Beer,
   ArrowLeftRight,
+  UserCog,
 } from 'lucide-react';
 
 const ROLE_COLORS = {
@@ -19,11 +20,12 @@ const ROLE_COLORS = {
   retailer:     'bg-orange-100 text-orange-700',
 };
 
-const navItems = [
+const getNavItems = (user) => [
   { to: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
   { to: '/batches',      label: 'Batches',       icon: Package },
   { to: '/transfers',    label: 'Transfers',     icon: ArrowLeftRight },
   { to: '/participants', label: 'Participants',  icon: Users },
+  ...(user?.isAdmin ? [{ to: '/users', label: 'Users', icon: UserCog }] : []),
 ];
 
 export default function Layout({ children }) {
@@ -77,7 +79,7 @@ export default function Layout({ children }) {
 
         {/* Nav items — scrollable middle section */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {getNavItems(user).map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

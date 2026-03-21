@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Batches from './pages/Batches';
 import Participants from './pages/Participants';
 import Transfers from './pages/Transfers';
+import Users from './pages/Users';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ function AppRoutes() {
       <Route path="/batches"      element={<ProtectedRoute><Batches />      </ProtectedRoute>} />
       <Route path="/transfers"    element={<ProtectedRoute><Transfers />    </ProtectedRoute>} />
       <Route path="/participants" element={<ProtectedRoute><Participants /> </ProtectedRoute>} />
+      <Route path="/users"        element={<ProtectedRoute><Users />         </ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

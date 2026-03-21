@@ -73,7 +73,19 @@ export default function Transfers() {
       setSelectedBatch(null);
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Transfer failed');
+      const raw = err.response?.data?.error || '';
+      if (raw.includes('District mismatch')) {
+        const match = raw.match(/Distributor is in '(.+?)' but Retailer is in '(.+?)'/);
+        if (match) {
+          toast.error(`❌ District mismatch! Your district is ${match[1]} but this retailer is in ${match[2]}. You can only transfer to retailers in your district.`, { duration: 5000 });
+        } else {
+          toast.error('❌ District mismatch! You can only transfer to retailers in your district.', { duration: 5000 });
+        }
+      } else if (raw.includes('not at your location')) {
+        toast.error('❌ This batch is not at your location.', { duration: 4000 });
+      } else {
+        toast.error(raw || 'Transfer failed. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
