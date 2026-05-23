@@ -1,10 +1,48 @@
-version: '3.7'
-
 networks:
   beer_network:
     name: beer_network
 
+volumes:
+  backend_data:
+
 services:
+
+  beer-backend:
+    build:
+      context: ../beer-backend
+    container_name: beer-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - JWT_SECRET=${JWT_SECRET:-bralirwa_beer_secret_2026}
+      - FABRIC_CHANNEL=${FABRIC_CHANNEL:-beerchannel}
+      - FABRIC_CHAINCODE=${FABRIC_CHAINCODE:-beer}
+      - FABRIC_NETWORK_PATH=/app/beer-network
+      - FABRIC_CONNECTION_MODE=docker
+    volumes:
+      - backend_data:/app/data
+      - ./organizations:/app/beer-network/organizations:ro
+    ports:
+      - 3001:3001
+    depends_on:
+      - orderer.example.com
+      - peer0.supplier.example.com
+      - peer0.manufacturer.example.com
+      - peer0.distributor.example.com
+      - peer0.retailer.example.com
+    networks:
+      - beer_network
+
+  beer-frontend:
+    build:
+      context: ../beer-frontend
+    container_name: beer-frontend
+    ports:
+      - 5173:80
+    depends_on:
+      - beer-backend
+    networks:
+      - beer_network
 
   orderer.example.com:
     image: hyperledger/fabric-orderer:2.5

@@ -22,30 +22,47 @@ function resolveNetworkPath(networkPath) {
 const NETWORK_PATH = resolveNetworkPath(process.env.FABRIC_NETWORK_PATH);
 const CHANNEL = process.env.FABRIC_CHANNEL || 'beerchannel';
 const CHAINCODE = process.env.FABRIC_CHAINCODE || 'beer';
+const FABRIC_CONNECTION_MODE = process.env.FABRIC_CONNECTION_MODE || 'local';
+
+function fabricAddress(hostname, localPort) {
+  if (FABRIC_CONNECTION_MODE === 'docker') {
+    return `${hostname}:7051`;
+  }
+
+  return `localhost:${localPort}`;
+}
+
+function ordererAddress() {
+  if (FABRIC_CONNECTION_MODE === 'docker') {
+    return 'orderer.example.com:7050';
+  }
+
+  return 'localhost:7050';
+}
 
 const ORGS = {
   SupplierMSP: {
     mspId: 'SupplierMSP',
     peer: 'peer0.supplier.example.com',
-    peerAddress: 'localhost:7051',
+    peerAddress: fabricAddress('peer0.supplier.example.com', 7051),
     domain: 'supplier.example.com',
   },
   ManufacturerMSP: {
     mspId: 'ManufacturerMSP',
     peer: 'peer0.manufacturer.example.com',
-    peerAddress: 'localhost:8051',
+    peerAddress: fabricAddress('peer0.manufacturer.example.com', 8051),
     domain: 'manufacturer.example.com',
   },
   DistributorMSP: {
     mspId: 'DistributorMSP',
     peer: 'peer0.distributor.example.com',
-    peerAddress: 'localhost:9051',
+    peerAddress: fabricAddress('peer0.distributor.example.com', 9051),
     domain: 'distributor.example.com',
   },
   RetailerMSP: {
     mspId: 'RetailerMSP',
     peer: 'peer0.retailer.example.com',
-    peerAddress: 'localhost:10051',
+    peerAddress: fabricAddress('peer0.retailer.example.com', 10051),
     domain: 'retailer.example.com',
   },
 };
@@ -114,7 +131,7 @@ function buildConnectionProfile(mspId) {
     peers: allPeers,
     orderers: {
       'orderer.example.com': {
-        url: 'grpc://localhost:7050',
+        url: `grpc://${ordererAddress()}`,
       },
     },
     channels: {
@@ -142,7 +159,7 @@ async function getContract(mspId) {
   await gateway.connect(connectionProfile, {
     wallet,
     identity: 'admin',
-    discovery: { enabled: false, asLocalhost: true },
+    discovery: { enabled: false, asLocalhost: FABRIC_CONNECTION_MODE !== 'docker' },
   });
 
   const network = await gateway.getNetwork(CHANNEL);
