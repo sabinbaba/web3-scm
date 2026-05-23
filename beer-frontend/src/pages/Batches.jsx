@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getBatches, createBatch, transferBatch, recordSale, getParticipants, getBatchHistory } from '../services/api';
 import toast from 'react-hot-toast';
-import { Plus, ArrowRight, ShoppingCart, History, X, Trash2 } from 'lucide-react';
+import { Plus, ArrowRight, ShoppingCart, History, X, Trash2, Beer } from 'lucide-react';
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '-';
@@ -22,10 +22,10 @@ function timeAgo(dateStr) {
 }
 
 const STATUS_COLORS = {
-  PRODUCED:       'bg-blue-100 text-blue-700',
-  IN_TRANSIT:     'bg-yellow-100 text-yellow-700',
-  PARTIALLY_SOLD: 'bg-orange-100 text-orange-700',
-  SOLD_OUT:       'bg-gray-100 text-gray-500',
+  PRODUCED:       'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
+  IN_TRANSIT:     'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+  PARTIALLY_SOLD: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
+  SOLD_OUT:       'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
 };
 
 const BEER_TYPES = [
@@ -152,9 +152,9 @@ export default function Batches() {
     } catch (err) {
       const raw = err.response?.data?.error || '';
       if (raw.includes('already exists')) {
-        toast.error('❌ Batch ID already exists! Please select a different ID.', { duration: 4000 });
+        toast.error('Batch ID already exists. Please select a different ID.', { duration: 4000 });
       } else if (raw.includes('not found')) {
-        toast.error('❌ Manufacturer not found. Please register the manufacturer first.', { duration: 4000 });
+        toast.error('Manufacturer not found. Please register the manufacturer first.', { duration: 4000 });
       } else {
         toast.error(raw || 'Failed to create batch. Please try again.');
       }
@@ -177,14 +177,14 @@ export default function Batches() {
       if (raw.includes('District mismatch')) {
         const match = raw.match(/Distributor is in '(.+?)' but Retailer is in '(.+?)'/);
         if (match) {
-          toast.error(`❌ District mismatch! Your district is ${match[1]} but this retailer is in ${match[2]}. You can only transfer to retailers in your district.`, { duration: 5000 });
+          toast.error(`District mismatch. Your district is ${match[1]} but this retailer is in ${match[2]}.`, { duration: 5000 });
         } else {
-          toast.error('❌ District mismatch! You can only transfer to retailers in your district.', { duration: 5000 });
+          toast.error('District mismatch. You can only transfer to retailers in your district.', { duration: 5000 });
         }
       } else if (raw.includes('not at your location')) {
-        toast.error('❌ This batch is not at your location.', { duration: 4000 });
+        toast.error('This batch is not at your location.', { duration: 4000 });
       } else if (raw.includes('already exists')) {
-        toast.error('❌ This batch ID already exists. Please choose another.', { duration: 4000 });
+        toast.error('This batch ID already exists. Please choose another.', { duration: 4000 });
       } else {
         toast.error(raw || 'Transfer failed. Please try again.');
       }
@@ -205,9 +205,9 @@ export default function Batches() {
     } catch (err) {
       const raw = err.response?.data?.error || '';
       if (raw.includes('Insufficient stock')) {
-        toast.error('❌ Insufficient stock! You cannot sell more than available quantity.', { duration: 4000 });
+        toast.error('Insufficient stock. You cannot sell more than available quantity.', { duration: 4000 });
       } else if (raw.includes('not at your location')) {
-        toast.error('❌ This batch is not at your location.', { duration: 4000 });
+        toast.error('This batch is not at your location.', { duration: 4000 });
       } else {
         toast.error(raw || 'Failed to record sale. Please try again.');
       }
@@ -248,7 +248,7 @@ export default function Batches() {
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
-        <div className="text-4xl mb-3">🍺</div>
+        <Beer size={36} className="mx-auto mb-3 text-amber-600" />
         <p className="text-gray-500">Loading batches...</p>
       </div>
     </div>
@@ -257,12 +257,15 @@ export default function Batches() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Beer Batches</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="page-title">Beer Batches</h1>
+          <p className="page-subtitle">Create, transfer, sell, and inspect batch history.</p>
+        </div>
         {user.role === 'manufacturer' && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+            className="inline-flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
           >
             <Plus size={16} /> New Batch
           </button>
@@ -270,50 +273,49 @@ export default function Batches() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="panel overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+          <table className="w-full min-w-[980px]">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Batch ID</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Beer Type</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Location</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Created At</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Created At</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Created By</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="table-head-cell">Batch ID</th>
+                <th className="table-head-cell">Beer Type</th>
+                <th className="table-head-cell">Quantity</th>
+                <th className="table-head-cell">Location</th>
+                <th className="table-head-cell">Status</th>
+                <th className="table-head-cell">Created At</th>
+                <th className="table-head-cell">Created By</th>
+                <th className="table-head-cell">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 bg-white">
               {batches.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-8 text-gray-400">No batches found</td></tr>
+                <tr><td colSpan={8} className="text-center py-10 text-sm text-gray-500">No batches found</td></tr>
               ) : batches.map((batch) => (
                 <tr key={batch.batchId} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-amber-600">{batch.batchId}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{batch.beerType}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{batch.quantity}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{batch.currentLocation}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[batch.status] || 'bg-gray-100'}`}>
+                  <td className="table-cell font-semibold text-amber-700">{batch.batchId}</td>
+                  <td className="table-cell">{batch.beerType}</td>
+                  <td className="table-cell">{batch.quantity}</td>
+                  <td className="table-cell">{batch.currentLocation}</td>
+                  <td className="table-cell">
+                    <span className={`px-2 py-1 rounded-md text-xs font-medium ${STATUS_COLORS[batch.status] || 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'}`}>
                       {batch.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="table-cell">
                     <p className="text-xs text-gray-600">{formatDateTime(batch.createdAt)}</p>
                     <p className="text-xs text-gray-400">{timeAgo(batch.createdAt)}</p>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="table-cell text-gray-500">
                     {batch.actionHistory?.[0]?.performedBy?.name || '-'}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="table-cell">
                     <div className="flex items-center gap-2">
                       {(user.role === 'manufacturer' || user.role === 'distributor') &&
                         batch.currentLocation === user.role.toUpperCase() && batch.status !== 'SOLD_OUT' && (
                         <button
                           onClick={() => { setSelectedBatch(batch); setShowTransferModal(true); }}
-                          className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition"
+                          className="icon-button text-violet-600 hover:bg-violet-50"
                           title="Transfer"
                         >
                           <ArrowRight size={16} />
@@ -322,7 +324,7 @@ export default function Batches() {
                       {user.role === 'retailer' && batch.currentLocation === 'RETAILER' && batch.status !== 'SOLD_OUT' && (
                         <button
                           onClick={() => { setSelectedBatch(batch); setShowSaleModal(true); }}
-                          className="p-1.5 text-green-500 hover:bg-green-50 rounded-lg transition"
+                          className="icon-button text-emerald-600 hover:bg-emerald-50"
                           title="Record Sale"
                         >
                           <ShoppingCart size={16} />
@@ -330,7 +332,7 @@ export default function Batches() {
                       )}
                       <button
                         onClick={() => handleHistory(batch)}
-                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"
+                        className="icon-button text-sky-600 hover:bg-sky-50"
                         title="History"
                       >
                         <History size={16} />
@@ -346,8 +348,8 @@ export default function Batches() {
 
       {/* ── CREATE MODAL ── */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
               <h2 className="font-semibold text-gray-800">Create New Batch</h2>
               <button onClick={() => setShowCreateModal(false)}><X size={20} /></button>
@@ -517,7 +519,7 @@ export default function Batches() {
                 disabled={submitting}
                 className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg font-medium transition disabled:opacity-50"
               >
-                {submitting ? 'Creating on Blockchain...' : '🍺 Create Batch'}
+                {submitting ? 'Creating on Blockchain...' : 'Create Batch'}
               </button>
             </form>
           </div>
@@ -526,8 +528,8 @@ export default function Batches() {
 
       {/* ── TRANSFER MODAL ── */}
       {showTransferModal && selectedBatch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="font-semibold text-gray-800">Transfer Batch</h2>
               <button onClick={() => setShowTransferModal(false)}><X size={20} /></button>
@@ -567,8 +569,8 @@ export default function Batches() {
 
       {/* ── SALE MODAL ── */}
       {showSaleModal && selectedBatch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="font-semibold text-gray-800">Record Sale</h2>
               <button onClick={() => setShowSaleModal(false)}><X size={20} /></button>
@@ -605,8 +607,8 @@ export default function Batches() {
 
       {/* ── HISTORY MODAL ── */}
       {showHistoryModal && selectedBatch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
               <h2 className="font-semibold text-gray-800">History: {selectedBatch.batchId}</h2>
               <button onClick={() => setShowHistoryModal(false)}><X size={20} /></button>

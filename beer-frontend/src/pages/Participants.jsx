@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getParticipants, registerParticipant } from '../services/api';
 import toast from 'react-hot-toast';
-import { Plus, X, Lock } from 'lucide-react';
+import { Plus, X, Lock, Mail, Building2, MapPin, Calendar, Beer } from 'lucide-react';
 
 const RWANDA_DISTRICTS = [
   'Bugesera','Burera','Gakenke','Gasabo','Gatsibo','Gicumbi','Gisagara',
@@ -13,10 +13,10 @@ const RWANDA_DISTRICTS = [
 ];
 
 const ROLE_COLORS = {
-  supplier:     'bg-green-100 text-green-700',
-  manufacturer: 'bg-blue-100 text-blue-700',
-  distributor:  'bg-purple-100 text-purple-700',
-  retailer:     'bg-orange-100 text-orange-700',
+  supplier:     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  manufacturer: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
+  distributor:  'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
+  retailer:     'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
 };
 
 export default function Participants() {
@@ -97,7 +97,7 @@ export default function Participants() {
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
-        <div className="text-4xl mb-3">🍺</div>
+        <Beer size={36} className="mx-auto mb-3 text-amber-600" />
         <p className="text-gray-500">Loading participants...</p>
       </div>
     </div>
@@ -106,22 +106,22 @@ export default function Participants() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Participants</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 className="page-title">Participants</h1>
+          <p className="page-subtitle">
             Organizations registered on the blockchain
           </p>
         </div>
         {canRegister ? (
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+            className="inline-flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
           >
             <Plus size={16} /> Register Participant
           </button>
         ) : (
-          <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 px-3 py-2 rounded-lg">
+          <div className="inline-flex items-center gap-2 text-xs text-gray-500 bg-white border border-gray-200 px-3 py-2 rounded-lg">
             <Lock size={14} />
             Only Manufacturer Admin can register
           </div>
@@ -131,23 +131,23 @@ export default function Participants() {
       {/* Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {participants.length === 0 ? (
-          <p className="text-gray-400 col-span-3 text-center py-8">No participants found</p>
+          <div className="panel col-span-full py-10 text-center text-sm text-gray-500">No participants found</div>
         ) : participants.map((p) => (
-          <div key={p.participantId} className="bg-white rounded-xl shadow-sm p-6">
+          <div key={p.participantId} className="panel p-5">
             <div className="flex items-start justify-between">
-              <div>
-                <p className="font-semibold text-gray-800">{p.name}</p>
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 truncate">{p.name}</p>
                 <p className="text-xs text-gray-400 mt-1">{p.participantId}</p>
               </div>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${ROLE_COLORS[p.role] || 'bg-gray-100 text-gray-600'}`}>
+              <span className={`px-2 py-1 rounded-md text-xs font-medium capitalize ${ROLE_COLORS[p.role] || 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'}`}>
                 {p.role}
               </span>
             </div>
-            <div className="mt-4 space-y-1 text-sm text-gray-500">
-              <p>📧 {p.contactInfo}</p>
-              <p>🏢 {p.mspId}</p>
-              {p.district && <p>📍 {p.district}</p>}
-              <p>📅 {new Date(p.registeredAt).toLocaleDateString()}</p>
+            <div className="mt-4 space-y-2 text-sm text-gray-600">
+              <p className="flex items-center gap-2"><Mail size={15} className="text-gray-400" /> <span className="truncate">{p.contactInfo}</span></p>
+              <p className="flex items-center gap-2"><Building2 size={15} className="text-gray-400" /> {p.mspId}</p>
+              {p.district && <p className="flex items-center gap-2"><MapPin size={15} className="text-gray-400" /> {p.district}</p>}
+              <p className="flex items-center gap-2"><Calendar size={15} className="text-gray-400" /> {new Date(p.registeredAt).toLocaleDateString()}</p>
             </div>
           </div>
         ))}
@@ -155,8 +155,8 @@ export default function Participants() {
 
       {/* Register Modal — only shown to Manufacturer Admin */}
       {showModal && canRegister && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="font-semibold text-gray-800">Register Participant</h2>
               <button onClick={() => setShowModal(false)}><X size={20} /></button>
@@ -222,8 +222,8 @@ export default function Participants() {
                     ))}
                   </select>
                   {form.role === 'distributor' && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      ⚠️ {takenDistrictsByDistributors.length} of {RWANDA_DISTRICTS.length} districts already have a distributor
+                    <p className="text-xs text-amber-700 mt-1">
+                      {takenDistrictsByDistributors.length} of {RWANDA_DISTRICTS.length} districts already have a distributor
                     </p>
                   )}
                   {form.role === 'retailer' && (

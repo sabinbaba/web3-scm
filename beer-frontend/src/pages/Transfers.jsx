@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getBatches, getParticipants, transferBatch } from '../services/api';
 import toast from 'react-hot-toast';
-import { ArrowRight, X, CheckCircle, Clock, Package } from 'lucide-react';
+import { ArrowRight, X, CheckCircle, Clock, Package, Beer, UserRound } from 'lucide-react';
 
 const STATUS_COLORS = {
-  PRODUCED:       'bg-blue-100 text-blue-700',
-  IN_TRANSIT:     'bg-yellow-100 text-yellow-700',
-  PARTIALLY_SOLD: 'bg-orange-100 text-orange-700',
-  SOLD_OUT:       'bg-gray-100 text-gray-500',
+  PRODUCED:       'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
+  IN_TRANSIT:     'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+  PARTIALLY_SOLD: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
+  SOLD_OUT:       'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
 };
 
 function formatDateTime(dateStr) {
@@ -29,10 +29,10 @@ function timeAgo(dateStr) {
 }
 
 const ROLE_COLORS = {
-  supplier:     'bg-green-100 text-green-700',
-  manufacturer: 'bg-blue-100 text-blue-700',
-  distributor:  'bg-purple-100 text-purple-700',
-  retailer:     'bg-orange-100 text-orange-700',
+  supplier:     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  manufacturer: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
+  distributor:  'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
+  retailer:     'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
 };
 
 export default function Transfers() {
@@ -77,12 +77,12 @@ export default function Transfers() {
       if (raw.includes('District mismatch')) {
         const match = raw.match(/Distributor is in '(.+?)' but Retailer is in '(.+?)'/);
         if (match) {
-          toast.error(`❌ District mismatch! Your district is ${match[1]} but this retailer is in ${match[2]}. You can only transfer to retailers in your district.`, { duration: 5000 });
+          toast.error(`District mismatch. Your district is ${match[1]} but this retailer is in ${match[2]}.`, { duration: 5000 });
         } else {
-          toast.error('❌ District mismatch! You can only transfer to retailers in your district.', { duration: 5000 });
+          toast.error('District mismatch. You can only transfer to retailers in your district.', { duration: 5000 });
         }
       } else if (raw.includes('not at your location')) {
-        toast.error('❌ This batch is not at your location.', { duration: 4000 });
+        toast.error('This batch is not at your location.', { duration: 4000 });
       } else {
         toast.error(raw || 'Transfer failed. Please try again.');
       }
@@ -115,7 +115,7 @@ export default function Transfers() {
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
-        <div className="text-4xl mb-3">🍺</div>
+        <Beer size={36} className="mx-auto mb-3 text-amber-600" />
         <p className="text-gray-500">Loading transfers...</p>
       </div>
     </div>
@@ -126,43 +126,43 @@ export default function Transfers() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800">Transfers</h1>
-        <p className="text-gray-500 text-sm mt-1">Track and manage batch transfers across the supply chain</p>
+        <h1 className="page-title">Transfers</h1>
+        <p className="page-subtitle">Track and manage batch transfers across the supply chain</p>
       </div>
 
       {/* My Batches Ready to Transfer */}
       {canTransfer && (
-        <div className="bg-white rounded-xl shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-              <Package size={18} className="text-amber-500" />
+        <div className="panel">
+          <div className="px-5 py-4 border-b border-gray-200">
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Package size={18} className="text-amber-600" />
               My Batches — Ready to Transfer
             </h2>
           </div>
-          <div className="p-6">
+          <div className="p-5">
             {myBatches.length === 0 ? (
-              <p className="text-gray-400 text-center py-4">No batches available for transfer</p>
+              <p className="text-gray-500 text-sm text-center py-6">No batches available for transfer</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {myBatches.map(batch => (
-                  <div key={batch.batchId} className="border border-gray-100 rounded-xl p-4 hover:border-amber-200 transition">
+                  <div key={batch.batchId} className="border border-gray-200 rounded-lg p-4 hover:border-amber-300 transition bg-white">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="font-semibold text-amber-600">{batch.batchId}</p>
                         <p className="text-sm text-gray-600">{batch.beerType}</p>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[batch.status]}`}>
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${STATUS_COLORS[batch.status]}`}>
                         {batch.status}
                       </span>
                     </div>
                     <div className="text-sm text-gray-500 space-y-1 mb-4">
-                      <p>📦 Quantity: <span className="font-medium text-gray-700">{batch.quantity}</span></p>
-                      <p>📍 Location: <span className="font-medium text-gray-700">{batch.currentLocation}</span></p>
-                      <p>👤 Owner: <span className="font-medium text-gray-700">{batch.currentOwnerId}</span></p>
+                      <p>Quantity: <span className="font-medium text-gray-700">{batch.quantity}</span></p>
+                      <p>Location: <span className="font-medium text-gray-700">{batch.currentLocation}</span></p>
+                      <p>Owner: <span className="font-medium text-gray-700">{batch.currentOwnerId}</span></p>
                     </div>
                     <button
                       onClick={() => { setSelectedBatch(batch); setShowModal(true); }}
-                      className="w-full flex items-center justify-center gap-2 bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg text-sm font-medium transition"
+                      className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 text-white py-2 rounded-lg text-sm font-medium transition"
                     >
                       <ArrowRight size={16} />
                       Transfer Batch
@@ -176,24 +176,24 @@ export default function Transfers() {
       )}
 
       {/* Transfer History Timeline */}
-      <div className="bg-white rounded-xl shadow-sm">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-            <Clock size={18} className="text-blue-500" />
+      <div className="panel">
+        <div className="px-5 py-4 border-b border-gray-200">
+          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Clock size={18} className="text-sky-600" />
             Transfer History
           </h2>
         </div>
-        <div className="p-6">
+        <div className="p-5">
           {allTransfers.length === 0 ? (
-            <p className="text-gray-400 text-center py-4">No transfers recorded yet</p>
+            <p className="text-gray-500 text-sm text-center py-6">No transfers recorded yet</p>
           ) : (
             <div className="space-y-4">
               {allTransfers.map((transfer, i) => (
                 <div key={i} className="flex gap-4">
                   {/* Timeline dot */}
                   <div className="flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-                      <CheckCircle size={16} className="text-purple-600" />
+                    <div className="w-8 h-8 rounded-full bg-violet-50 ring-1 ring-violet-200 flex items-center justify-center flex-shrink-0">
+                      <CheckCircle size={16} className="text-violet-700" />
                     </div>
                     {i < allTransfers.length - 1 && (
                       <div className="w-0.5 bg-gray-200 flex-1 mt-1" style={{minHeight: '20px'}} />
@@ -202,7 +202,7 @@ export default function Transfers() {
 
                   {/* Transfer details */}
                   <div className="flex-1 pb-4">
-                    <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-semibold text-amber-600">{transfer.batchId}</span>
                         <div>
@@ -219,7 +219,7 @@ export default function Transfers() {
                           <p className="font-medium text-gray-700">{transfer.from}</p>
                           <p className="text-xs text-gray-400">{transfer.fromMspId}</p>
                         </div>
-                        <ArrowRight size={18} className="text-purple-400 flex-shrink-0" />
+                        <ArrowRight size={18} className="text-violet-400 flex-shrink-0" />
                         <div className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
                           <p className="text-xs text-gray-400">To</p>
                           <p className="font-medium text-gray-700">{transfer.to}</p>
@@ -230,7 +230,8 @@ export default function Transfers() {
                       {/* Performed by */}
                       {transfer.performedBy && (
                         <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <span>👤 Performed by:</span>
+                          <UserRound size={15} className="text-gray-400" />
+                          <span>Performed by:</span>
                           <span className="font-medium text-gray-700">{transfer.performedBy.name}</span>
                           <span className="text-gray-400">({transfer.performedBy.email})</span>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[transfer.performedBy.mspId?.replace('MSP','').toLowerCase()] || 'bg-gray-100 text-gray-600'}`}>
@@ -242,7 +243,7 @@ export default function Transfers() {
                       {/* TxID */}
                       {transfer.txId && (
                         <p className="text-xs text-gray-400 mt-2 truncate">
-                          🔗 TxID: {transfer.txId}
+                          TxID: {transfer.txId}
                         </p>
                       )}
                     </div>
@@ -256,8 +257,8 @@ export default function Transfers() {
 
       {/* Transfer Modal */}
       {showModal && selectedBatch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="font-semibold text-gray-800">Transfer Batch</h2>
               <button onClick={() => { setShowModal(false); setTransferTo(''); }}><X size={20} /></button>
@@ -319,7 +320,7 @@ export default function Transfers() {
                 <button
                   type="submit"
                   disabled={submitting || transferTargets.length === 0}
-                  className="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg font-medium transition disabled:opacity-50"
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white py-2 rounded-lg font-medium transition disabled:opacity-50"
                 >
                   {submitting ? 'Transferring...' : 'Confirm Transfer'}
                 </button>

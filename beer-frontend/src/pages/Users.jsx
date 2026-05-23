@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getUsers, register, getParticipants } from '../services/api';
 import toast from 'react-hot-toast';
-import { Plus, X, Trash2, ShieldCheck, User } from 'lucide-react';
+import { Plus, X, Trash2, ShieldCheck, User, Beer, MapPin, Building2 } from 'lucide-react';
 
 const ROLE_COLORS = {
-  supplier:     'bg-green-100 text-green-700',
-  manufacturer: 'bg-blue-100 text-blue-700',
-  distributor:  'bg-purple-100 text-purple-700',
-  retailer:     'bg-orange-100 text-orange-700',
+  supplier:     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  manufacturer: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
+  distributor:  'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
+  retailer:     'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
 };
 
 const ROLE_TO_MSP = {
@@ -100,7 +100,7 @@ export default function Users() {
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
-        <div className="text-4xl mb-3">👥</div>
+        <Beer size={36} className="mx-auto mb-3 text-amber-600" />
         <p className="text-gray-500">Loading users...</p>
       </div>
     </div>
@@ -109,14 +109,14 @@ export default function Users() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Users</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage system users across all organizations</p>
+          <h1 className="page-title">Users</h1>
+          <p className="page-subtitle">Manage system users across all organizations</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          className="inline-flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
         >
           <Plus size={16} /> Add User
         </button>
@@ -125,9 +125,9 @@ export default function Users() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {['supplier', 'manufacturer', 'distributor', 'retailer'].map(role => (
-          <div key={role} className="bg-white rounded-xl shadow-sm p-4 text-center">
-            <p className="text-2xl font-bold text-gray-800">{groupedUsers[role]?.length || 0}</p>
-            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[role]}`}>
+          <div key={role} className="panel p-4 text-center">
+            <p className="text-2xl font-bold text-gray-900">{groupedUsers[role]?.length || 0}</p>
+            <span className={`inline-flex mt-1 px-2 py-0.5 rounded-md text-xs font-medium capitalize ${ROLE_COLORS[role]}`}>
               {role}
             </span>
           </div>
@@ -135,51 +135,51 @@ export default function Users() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="panel overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+          <table className="w-full min-w-[980px]">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">User</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Role</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Organization</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Participant</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Created At</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="table-head-cell">User</th>
+                <th className="table-head-cell">Role</th>
+                <th className="table-head-cell">Organization</th>
+                <th className="table-head-cell">Participant</th>
+                <th className="table-head-cell">Type</th>
+                <th className="table-head-cell">Created At</th>
+                <th className="table-head-cell">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 bg-white">
               {users.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-8 text-gray-400">No users found</td></tr>
+                <tr><td colSpan={7} className="text-center py-10 text-sm text-gray-500">No users found</td></tr>
               ) : users.map(u => {
                 const participantInfo = getParticipantInfo(u.participantId);
                 return (
                   <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-medium text-gray-800">{u.name}</p>
+                    <td className="table-cell">
+                      <p className="text-sm font-medium text-gray-900">{u.name}</p>
                       <p className="text-xs text-gray-400">{u.email}</p>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${ROLE_COLORS[u.role] || 'bg-gray-100'}`}>
+                    <td className="table-cell">
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium capitalize ${ROLE_COLORS[u.role] || 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'}`}>
                         {u.role}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{u.mspId}</td>
-                    <td className="px-6 py-4">
+                    <td className="table-cell text-gray-600">{u.mspId}</td>
+                    <td className="table-cell">
                       {participantInfo ? (
                         <div>
                           <p className="text-sm font-medium text-amber-600">{participantInfo.participantId}</p>
                           <p className="text-xs text-gray-400">{participantInfo.name}</p>
                           {participantInfo.district && (
-                            <p className="text-xs text-gray-400">📍 {participantInfo.district}</p>
+                            <p className="text-xs text-gray-400 inline-flex items-center gap-1"><MapPin size={12} /> {participantInfo.district}</p>
                           )}
                         </div>
                       ) : (
                         <span className="text-xs text-gray-400">—</span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="table-cell">
                       {u.isAdmin ? (
                         <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
                           <ShieldCheck size={14} /> Admin
@@ -190,12 +190,12 @@ export default function Users() {
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-xs text-gray-500">{formatDateTime(u.createdAt)}</td>
-                    <td className="px-6 py-4">
+                    <td className="table-cell text-xs text-gray-500">{formatDateTime(u.createdAt)}</td>
+                    <td className="table-cell">
                       {!u.isAdmin && u.id !== user.id && (
                         <button
                           onClick={() => handleDelete(u.id, u.name)}
-                          className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition"
+                          className="icon-button text-red-500 hover:bg-red-50"
                           title="Delete user"
                         >
                           <Trash2 size={16} />
@@ -212,8 +212,8 @@ export default function Users() {
 
       {/* Add User Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
               <h2 className="font-semibold text-gray-800">Add New User</h2>
               <button onClick={() => setShowModal(false)}><X size={20} /></button>
@@ -286,7 +286,7 @@ export default function Users() {
                     <option value="">No participant linked</option>
                     {filteredParticipants.map(p => (
                       <option key={p.participantId} value={p.participantId}>
-                        {p.participantId} — {p.name} {p.district ? `(📍 ${p.district})` : ''}
+                        {p.participantId} — {p.name} {p.district ? `(${p.district})` : ''}
                       </option>
                     ))}
                   </select>
@@ -304,9 +304,9 @@ export default function Users() {
                     const p = getParticipantInfo(form.participantId);
                     return p ? (
                       <div className="text-amber-600 space-y-1">
-                        <p>🏢 {p.name} ({p.participantId})</p>
-                        {p.district && <p>📍 District: {p.district}</p>}
-                        <p>👤 {form.name || 'User'} will act on behalf of this participant</p>
+                        <p className="flex items-center gap-2"><Building2 size={15} /> {p.name} ({p.participantId})</p>
+                        {p.district && <p className="flex items-center gap-2"><MapPin size={15} /> District: {p.district}</p>}
+                        <p>{form.name || 'User'} will act on behalf of this participant</p>
                       </div>
                     ) : null;
                   })()}
