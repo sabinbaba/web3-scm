@@ -207,13 +207,21 @@ export default function Transfers() {
                 });
                 // Mark last as current if not sold out
                 if (batch.status !== 'SOLD_OUT') participantChain[participantChain.length-1].isCurrent = true;
+                // Calculate total sold for this batch
+                const sales = (batch.actionHistory || []).filter(a => a.action === 'SALE_RECORDED');
+                const totalSold = sales.reduce((sum, s) => sum + (s.quantitySold || 0), 0);
+                const remaining = batch.quantity;
                 return (
                   <div key={batch.batchId} className="bg-gray-50 rounded-lg p-4 shadow-sm">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-semibold text-amber-600">{batch.batchId}</span>
                       <span className={`px-2 py-1 rounded-md text-xs font-medium ${STATUS_COLORS[batch.status]}`}>{batch.status}</span>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3">{batch.beerType} — {batch.quantity} units</p>
+                    <p className="text-sm text-gray-600 mb-3">{batch.beerType} — {remaining} units remaining</p>
+                    <div className="flex gap-4 mb-2 text-xs text-gray-500">
+                      <span>Quantity Sold: <b className="text-emerald-700">{totalSold}</b></span>
+                      <span>Quantity Remaining: <b className="text-amber-700">{remaining}</b></span>
+                    </div>
                     {/* Horizontal Stepper */}
                     <div className="flex items-center overflow-x-auto gap-0">
                       {participantChain.map((p, idx) => (

@@ -330,13 +330,24 @@ export default function Batches() {
                           <ShoppingCart size={16} />
                         </button>
                       )}
-                      <button
-                        onClick={() => handleHistory(batch)}
-                        className="icon-button text-sky-600 hover:bg-sky-50"
-                        title="History"
-                      >
-                        <History size={16} />
-                      </button>
+                      {batch.status === 'SOLD_OUT' ? (
+                        <button
+                          onClick={() => handleHistory(batch)}
+                          className="icon-button text-gray-600 hover:bg-gray-200"
+                          title="View Sold History"
+                        >
+                          <History size={16} />
+                          <span className="ml-1 text-xs">View Sold</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleHistory(batch)}
+                          className="icon-button text-sky-600 hover:bg-sky-50"
+                          title="History"
+                        >
+                          <History size={16} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -631,7 +642,8 @@ export default function Batches() {
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium mb-2 ${
                         action.action === 'CREATED' ? 'bg-blue-100 text-blue-700' :
                         action.action === 'TRANSFERRED' ? 'bg-purple-100 text-purple-700' :
-                        'bg-green-100 text-green-700'
+                        action.action === 'SALE_RECORDED' ? 'bg-green-100 text-green-700' :
+                        'bg-gray-100 text-gray-700'
                       }`}>
                         {action.action}
                       </span>
@@ -646,6 +658,11 @@ export default function Batches() {
                           From: <span className="font-medium">{action.from}</span>
                           {' → '}
                           To: <span className="font-medium">{action.to}</span>
+                        </p>
+                      )}
+                      {action.action === 'SALE_RECORDED' && (
+                        <p className="text-sm text-emerald-700 mt-1">
+                          Quantity Sold: <span className="font-semibold">{action.quantitySold}</span>
                         </p>
                       )}
                     </div>
