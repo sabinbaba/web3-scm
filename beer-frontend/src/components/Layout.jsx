@@ -8,10 +8,10 @@ import {
   Users,
   LogOut,
   Menu,
-  Beer,
   ArrowLeftRight,
   UserCog,
 } from 'lucide-react';
+import BrandMark from './BrandMark';
 
 const ROLE_COLORS = {
   supplier:     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
@@ -60,9 +60,7 @@ export default function Layout({ children }) {
         {/* Logo */}
         <div className="px-5 py-5 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-              <Beer size={24} />
-            </div>
+            <BrandMark className="h-12 w-12 flex-shrink-0" />
             <div>
               <h1 className="font-bold text-gray-900 text-lg leading-tight">Bralirwa SCM</h1>
               <p className="text-xs text-gray-500">Supply chain workspace</p>
@@ -120,7 +118,7 @@ export default function Layout({ children }) {
             <Menu size={22} />
           </button>
           <div className="flex items-center gap-2">
-            <Beer className="text-amber-600" size={20} />
+            <BrandMark className="h-8 w-8 flex-shrink-0" />
             <span className="font-bold text-gray-900">Bralirwa SCM</span>
           </div>
         </header>

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Beer, LockKeyhole, Mail } from 'lucide-react';
+import { LockKeyhole, Mail } from 'lucide-react';
+import bottleBackground from '../assets/beer-bottle-background.png';
+import BrandMark from '../components/BrandMark';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -26,14 +28,15 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="panel w-full max-w-md p-7 sm:p-8">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center"
+      style={{ backgroundImage: `linear-gradient(90deg, rgb(245 247 250 / 0.96) 0%, rgb(245 247 250 / 0.9) 42%, rgb(245 247 250 / 0.2) 100%), url(${bottleBackground})` }}
+    >
+      <div className="panel w-full max-w-md p-7 sm:p-8 bg-white/95 backdrop-blur-sm">
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-            <Beer size={30} />
-          </div>
+          <BrandMark className="mx-auto mb-4 h-16 w-16" />
           <h1 className="text-2xl font-bold text-gray-900">Bralirwa SCM</h1>
           <p className="text-gray-500 text-sm mt-1">Supply Chain Management</p>
         </div>

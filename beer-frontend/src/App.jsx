@@ -8,16 +8,14 @@ import Batches from './pages/Batches';
 import Participants from './pages/Participants';
 import Transfers from './pages/Transfers';
 import Users from './pages/Users';
-import { Beer } from 'lucide-react';
+import BrandMark from './components/BrandMark';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-          <Beer size={26} />
-        </div>
+        <BrandMark className="mx-auto mb-3 h-12 w-12" />
         <p className="text-sm text-gray-500">Loading workspace...</p>
       </div>
     </div>
