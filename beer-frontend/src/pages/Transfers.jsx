@@ -175,81 +175,84 @@ export default function Transfers() {
         </div>
       )}
 
-      {/* Transfer History Timeline */}
+      {/* Transfer Progress Steppers by Batch */}
       <div className="panel">
         <div className="px-5 py-4 border-b border-gray-200">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
             <Clock size={18} className="text-sky-600" />
-            Transfer History
+            Transfer Progress by Batch
           </h2>
         </div>
         <div className="p-5">
-          {allTransfers.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-6">No transfers recorded yet</p>
+          {batches.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-6">No batches found</p>
           ) : (
-            <div className="space-y-4">
-              {allTransfers.map((transfer, i) => (
-                <div key={i} className="flex gap-4">
-                  {/* Timeline dot */}
-                  <div className="flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-violet-50 ring-1 ring-violet-200 flex items-center justify-center flex-shrink-0">
-                      <CheckCircle size={16} className="text-violet-700" />
+            <div className="space-y-8">
+              {batches.map(batch => {
+                // Build the transfer chain for this batch
+                const actions = (batch.actionHistory || []).filter(a => a.action === 'TRANSFERRED');
+                if (actions.length === 0) return null;
+                // Build participant chain: start with initial owner, then each transfer's 'to'
+                const participantChain = [
+                  { name: batch.createdBy?.name || batch.currentOwnerId, role: batch.createdBy?.role || batch.currentLocation, mspId: batch.createdBy?.mspId || '', time: batch.createdAt, isCurrent: false }
+                ];
+                actions.forEach((a, idx) => {
+                  participantChain.push({
+                    name: a.toName || a.to || a.toMspId,
+                    role: a.toRole || a.toMspId?.replace('MSP','').toLowerCase() || '',
+                    mspId: a.toMspId || '',
+                    time: a.timestamp,
+                    isCurrent: idx === actions.length - 1 && batch.status !== 'SOLD_OUT',
+                  });
+                });
+                // Mark last as current if not sold out
+                if (batch.status !== 'SOLD_OUT') participantChain[participantChain.length-1].isCurrent = true;
+                return (
+                  <div key={batch.batchId} className="bg-gray-50 rounded-lg p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-amber-600">{batch.batchId}</span>
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${STATUS_COLORS[batch.status]}`}>{batch.status}</span>
                     </div>
-                    {i < allTransfers.length - 1 && (
-                      <div className="w-0.5 bg-gray-200 flex-1 mt-1" style={{minHeight: '20px'}} />
+                    <p className="text-sm text-gray-600 mb-3">{batch.beerType} — {batch.quantity} units</p>
+                    {/* Horizontal Stepper */}
+                    <div className="flex items-center overflow-x-auto gap-0">
+                      {participantChain.map((p, idx) => (
+                        <div key={idx} className="flex items-center">
+                          <div className={`flex flex-col items-center px-3 ${p.isCurrent ? 'font-bold text-violet-700' : 'text-gray-700'}`}> 
+                            <div className={`rounded-full w-10 h-10 flex items-center justify-center mb-1 ring-2 ${p.isCurrent ? 'ring-violet-400 bg-violet-50' : 'ring-gray-200 bg-white'}`}>
+                              <UserRound size={20} />
+                            </div>
+                            <span className="text-xs truncate max-w-[80px]">{p.name}</span>
+                            <span className={`text-[10px] mt-0.5 px-2 py-0.5 rounded-full ${ROLE_COLORS[p.role] || 'bg-gray-100 text-gray-600'}`}>{p.role}</span>
+                            <span className="text-[10px] text-gray-400">{formatDateTime(p.time)}</span>
+                          </div>
+                          {idx < participantChain.length - 1 && (
+                            <ArrowRight size={20} className="mx-1 text-violet-400" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Details of last transfer */}
+                    {actions.length > 0 && (
+                      <div className="mt-4 text-xs text-gray-500">
+                        <div className="flex flex-wrap gap-4 items-center">
+                          <span>Last Transfer:</span>
+                          <span>From <b>{actions[actions.length-1].from}</b> ({actions[actions.length-1].fromMspId})</span>
+                          <ArrowRight size={14} className="text-violet-400" />
+                          <span>To <b>{actions[actions.length-1].to}</b> ({actions[actions.length-1].toMspId})</span>
+                          <span>at {formatDateTime(actions[actions.length-1].timestamp)}</span>
+                          {actions[actions.length-1].performedBy && (
+                            <span>by <b>{actions[actions.length-1].performedBy.name}</b> ({actions[actions.length-1].performedBy.email})</span>
+                          )}
+                          {actions[actions.length-1].txId && (
+                            <span>TxID: {actions[actions.length-1].txId}</span>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
-
-                  {/* Transfer details */}
-                  <div className="flex-1 pb-4">
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold text-amber-600">{transfer.batchId}</span>
-                        <div>
-                          <p className="text-xs text-gray-600">{formatDateTime(transfer.timestamp)}</p>
-                          <p className="text-xs text-gray-400">{timeAgo(transfer.timestamp)}</p>
-                        </div>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3">{transfer.beerType}</p>
-
-                      {/* From → To */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
-                          <p className="text-xs text-gray-400">From</p>
-                          <p className="font-medium text-gray-700">{transfer.from}</p>
-                          <p className="text-xs text-gray-400">{transfer.fromMspId}</p>
-                        </div>
-                        <ArrowRight size={18} className="text-violet-400 flex-shrink-0" />
-                        <div className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
-                          <p className="text-xs text-gray-400">To</p>
-                          <p className="font-medium text-gray-700">{transfer.to}</p>
-                          <p className="text-xs text-gray-400">{transfer.toMspId}</p>
-                        </div>
-                      </div>
-
-                      {/* Performed by */}
-                      {transfer.performedBy && (
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <UserRound size={15} className="text-gray-400" />
-                          <span>Performed by:</span>
-                          <span className="font-medium text-gray-700">{transfer.performedBy.name}</span>
-                          <span className="text-gray-400">({transfer.performedBy.email})</span>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[transfer.performedBy.mspId?.replace('MSP','').toLowerCase()] || 'bg-gray-100 text-gray-600'}`}>
-                            {transfer.performedBy.mspId}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* TxID */}
-                      {transfer.txId && (
-                        <p className="text-xs text-gray-400 mt-2 truncate">
-                          TxID: {transfer.txId}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
