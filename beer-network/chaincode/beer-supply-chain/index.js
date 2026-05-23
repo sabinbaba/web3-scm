@@ -250,6 +250,92 @@ class BeerSupplyChain extends Contract {
     return JSON.stringify(all.filter(b => b.mspId === msp));
   }
 
+  async SplitBatch(ctx, sourceBatchId, newBatchId, splitQuantity, performedByJson) {
+    this._require(sourceBatchId, 'sourceBatchId');
+    this._require(newBatchId, 'newBatchId');
+    this._require(splitQuantity, 'splitQuantity');
+
+    if (sourceBatchId === newBatchId) {
+      throw new Error('New batch ID must be different from source batch ID');
+    }
+
+    const role = this._getRole(ctx);
+    const msp = this._getMSP(ctx);
+    const qty = parseInt(splitQuantity);
+    if (isNaN(qty) || qty <= 0) throw new Error('Split quantity must be positive');
+
+    const sourceKey = this._batchKey(ctx, sourceBatchId);
+    const source = await this._getState(ctx, sourceKey, 'Source batch');
+
+    if (source.currentLocation !== role.toUpperCase()) {
+      throw new Error(`Batch '${sourceBatchId}' is not at your location`);
+    }
+    if (source.mspId !== msp) {
+      throw new Error(`Batch '${sourceBatchId}' does not belong to your organization`);
+    }
+    if (source.quantity < qty) {
+      throw new Error(`Insufficient stock: available ${source.quantity}, requested ${qty}`);
+    }
+
+    const performedBy = this._parseUser(performedByJson);
+    if (!performedBy || !performedBy.participantId) {
+      throw new Error('A linked participant user is required to split a received batch');
+    }
+    if (source.currentOwnerId !== performedBy.participantId) {
+      throw new Error(`Only the current receiving participant '${source.currentOwnerId}' can split this batch`);
+    }
+
+    const newKey = this._batchKey(ctx, newBatchId);
+    const existing = await ctx.stub.getState(newKey);
+    if (existing && existing.length > 0) throw new Error(`Batch '${newBatchId}' already exists`);
+
+    const now = getTxTimestamp(ctx);
+    const txId = ctx.stub.getTxID();
+
+    if (!source.actionHistory) source.actionHistory = [];
+    source.quantity -= qty;
+    source.status = source.quantity === 0 ? 'SPLIT_OUT' : source.status;
+    source.updatedAt = now;
+    source.actionHistory.push({
+      action: 'SPLIT_OUT',
+      splitQuantity: qty,
+      newBatchId,
+      performedBy,
+      mspId: msp,
+      timestamp: now,
+      txId,
+    });
+
+    const child = {
+      ...source,
+      batchId: newBatchId,
+      quantity: qty,
+      parentBatchId: sourceBatchId,
+      sourceBatchId,
+      status: source.currentLocation === 'RETAILER' ? 'RECEIVED' : 'SPLIT',
+      salesHistory: [],
+      actionHistory: [
+        ...(source.actionHistory || []),
+        {
+          action: 'SPLIT_FROM',
+          sourceBatchId,
+          splitQuantity: qty,
+          performedBy,
+          mspId: msp,
+          timestamp: now,
+          txId,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await this._putState(ctx, sourceKey, source);
+    await this._putState(ctx, newKey, child);
+    ctx.stub.setEvent('BatchSplit', Buffer.from(JSON.stringify({ sourceBatchId, newBatchId, splitQuantity: qty, performedBy })));
+    return JSON.stringify({ sourceBatch: source, newBatch: child });
+  }
+
   async TransferBatch(ctx, batchId, toParticipantId, performedByJson) {
     this._require(batchId, 'batchId');
     this._require(toParticipantId, 'toParticipantId');
