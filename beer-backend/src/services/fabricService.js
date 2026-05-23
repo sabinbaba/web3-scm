@@ -3,8 +3,23 @@
 const { Gateway, Wallets } = require('fabric-network');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-const NETWORK_PATH = process.env.FABRIC_NETWORK_PATH;
+function resolveNetworkPath(networkPath) {
+  const configuredPath = networkPath || path.resolve(__dirname, '../../../beer-network');
+
+  if (configuredPath === '~') {
+    return os.homedir();
+  }
+
+  if (configuredPath.startsWith('~/')) {
+    return path.join(os.homedir(), configuredPath.slice(2));
+  }
+
+  return path.resolve(configuredPath);
+}
+
+const NETWORK_PATH = resolveNetworkPath(process.env.FABRIC_NETWORK_PATH);
 const CHANNEL = process.env.FABRIC_CHANNEL || 'beerchannel';
 const CHAINCODE = process.env.FABRIC_CHAINCODE || 'beer';
 

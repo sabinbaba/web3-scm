@@ -1,93 +1,93 @@
 #!/bin/bash
 # Bralirwa SCM - Network Startup Script
+set -euo pipefail
 
-cd ~/Desktop/bralirwa-scm/beer-network
-export PATH=$PATH:$HOME/fabric-samples/bin
+cd ~/web3-scm/beer-network
 
-echo "🍺 Starting Bralirwa SCM Network..."
+CHANNEL_NAME=beerchannel
+CHAINCODE_NAME=beer
+CHAINCODE_VERSION=9.0
+CHAINCODE_SEQUENCE=1
+CHAINCODE_PACKAGE=beer9.tar.gz
+PEER_IMAGE=hyperledger/fabric-peer:2.5
+NODEENV_IMAGE=hyperledger/fabric-nodeenv:2.5
 
-# Start Docker containers
+echo "Starting Bralirwa SCM Network..."
+
+docker image inspect "$NODEENV_IMAGE" >/dev/null 2>&1 || docker pull "$NODEENV_IMAGE"
 docker compose up -d
 sleep 5
-echo "✓ Containers started"
+echo "Containers started"
 
-# Create channel
-export CORE_PEER_LOCALMSPID=ManufacturerMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/manufacturer.example.com/users/Admin@manufacturer.example.com/msp
-export CORE_PEER_ADDRESS=localhost:8051
-peer channel create -o localhost:7050 -c beerchannel -f ./channel-artifacts/beerchannel.tx 2>/dev/null || echo "Channel already exists"
-echo "✓ Channel ready"
+run_peer() {
+  local msp_id=$1
+  local domain=$2
+  local address=$3
+  shift 3
 
-# Join all peers
-peer channel join -b beerchannel.block 2>/dev/null; echo "✓ Manufacturer joined"
+  docker run --rm --network host \
+    -v "$PWD:/work" \
+    -w /work \
+    -e FABRIC_CFG_PATH=/work \
+    -e CORE_PEER_LOCALMSPID="$msp_id" \
+    -e CORE_PEER_MSPCONFIGPATH="/work/organizations/peerOrganizations/$domain/users/Admin@$domain/msp" \
+    -e CORE_PEER_ADDRESS="localhost:$address" \
+    "$PEER_IMAGE" peer "$@"
+}
 
-export CORE_PEER_LOCALMSPID=SupplierMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/supplier.example.com/users/Admin@supplier.example.com/msp
-export CORE_PEER_ADDRESS=localhost:7051
-peer channel join -b beerchannel.block 2>/dev/null; echo "✓ Supplier joined"
+run_manufacturer() {
+  run_peer ManufacturerMSP manufacturer.example.com 8051 "$@"
+}
 
-export CORE_PEER_LOCALMSPID=DistributorMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/distributor.example.com/users/Admin@distributor.example.com/msp
-export CORE_PEER_ADDRESS=localhost:9051
-peer channel join -b beerchannel.block 2>/dev/null; echo "✓ Distributor joined"
+PACKAGE_ID=$(docker run --rm -v "$PWD:/work" -w /work "$PEER_IMAGE" \
+  peer lifecycle chaincode calculatepackageid "/work/$CHAINCODE_PACKAGE")
 
-export CORE_PEER_LOCALMSPID=RetailerMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/retailer.example.com/users/Admin@retailer.example.com/msp
-export CORE_PEER_ADDRESS=localhost:10051
-peer channel join -b beerchannel.block 2>/dev/null; echo "✓ Retailer joined"
+run_manufacturer channel create \
+  -o localhost:7050 \
+  -c "$CHANNEL_NAME" \
+  -f "/work/channel-artifacts/$CHANNEL_NAME.tx" \
+  --outputBlock "/work/$CHANNEL_NAME.block" || echo "Channel already exists"
+echo "Channel ready"
 
-# Install chaincode
-PACKAGE_ID=beer_9.0:9e81408cdf819cf3879f9d5236ff531734a01972c0b061d0a465a71ca634044a
+run_peer ManufacturerMSP manufacturer.example.com 8051 channel join -b "/work/$CHANNEL_NAME.block" || true
+run_peer SupplierMSP supplier.example.com 7051 channel join -b "/work/$CHANNEL_NAME.block" || true
+run_peer DistributorMSP distributor.example.com 9051 channel join -b "/work/$CHANNEL_NAME.block" || true
+run_peer RetailerMSP retailer.example.com 10051 channel join -b "/work/$CHANNEL_NAME.block" || true
+echo "Peers joined"
 
-export CORE_PEER_LOCALMSPID=ManufacturerMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/manufacturer.example.com/users/Admin@manufacturer.example.com/msp
-export CORE_PEER_ADDRESS=localhost:8051
-peer lifecycle chaincode install beer9.tar.gz 2>/dev/null; echo "✓ Manufacturer chaincode installed"
+run_peer ManufacturerMSP manufacturer.example.com 8051 lifecycle chaincode install "/work/$CHAINCODE_PACKAGE" || true
+run_peer SupplierMSP supplier.example.com 7051 lifecycle chaincode install "/work/$CHAINCODE_PACKAGE" || true
+run_peer DistributorMSP distributor.example.com 9051 lifecycle chaincode install "/work/$CHAINCODE_PACKAGE" || true
+run_peer RetailerMSP retailer.example.com 10051 lifecycle chaincode install "/work/$CHAINCODE_PACKAGE" || true
+echo "Chaincode installed"
 
-export CORE_PEER_LOCALMSPID=SupplierMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/supplier.example.com/users/Admin@supplier.example.com/msp
-export CORE_PEER_ADDRESS=localhost:7051
-peer lifecycle chaincode install beer9.tar.gz 2>/dev/null; echo "✓ Supplier chaincode installed"
+run_peer SupplierMSP supplier.example.com 7051 lifecycle chaincode approveformyorg \
+  -o localhost:7050 --channelID "$CHANNEL_NAME" --name "$CHAINCODE_NAME" \
+  --version "$CHAINCODE_VERSION" --package-id "$PACKAGE_ID" --sequence "$CHAINCODE_SEQUENCE" || true
+run_peer ManufacturerMSP manufacturer.example.com 8051 lifecycle chaincode approveformyorg \
+  -o localhost:7050 --channelID "$CHANNEL_NAME" --name "$CHAINCODE_NAME" \
+  --version "$CHAINCODE_VERSION" --package-id "$PACKAGE_ID" --sequence "$CHAINCODE_SEQUENCE" || true
+run_peer DistributorMSP distributor.example.com 9051 lifecycle chaincode approveformyorg \
+  -o localhost:7050 --channelID "$CHANNEL_NAME" --name "$CHAINCODE_NAME" \
+  --version "$CHAINCODE_VERSION" --package-id "$PACKAGE_ID" --sequence "$CHAINCODE_SEQUENCE" || true
+run_peer RetailerMSP retailer.example.com 10051 lifecycle chaincode approveformyorg \
+  -o localhost:7050 --channelID "$CHANNEL_NAME" --name "$CHAINCODE_NAME" \
+  --version "$CHAINCODE_VERSION" --package-id "$PACKAGE_ID" --sequence "$CHAINCODE_SEQUENCE" || true
+echo "Chaincode approved"
 
-export CORE_PEER_LOCALMSPID=DistributorMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/distributor.example.com/users/Admin@distributor.example.com/msp
-export CORE_PEER_ADDRESS=localhost:9051
-peer lifecycle chaincode install beer9.tar.gz 2>/dev/null; echo "✓ Distributor chaincode installed"
-
-export CORE_PEER_LOCALMSPID=RetailerMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/retailer.example.com/users/Admin@retailer.example.com/msp
-export CORE_PEER_ADDRESS=localhost:10051
-peer lifecycle chaincode install beer9.tar.gz 2>/dev/null; echo "✓ Retailer chaincode installed"
-
-# Approve all orgs
-export CORE_PEER_LOCALMSPID=SupplierMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/supplier.example.com/users/Admin@supplier.example.com/msp
-export CORE_PEER_ADDRESS=localhost:7051
-peer lifecycle chaincode approveformyorg -o localhost:7050 --channelID beerchannel --name beer --version 9.0 --package-id $PACKAGE_ID --sequence 1 2>/dev/null; echo "✓ Supplier approved"
-
-export CORE_PEER_LOCALMSPID=ManufacturerMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/manufacturer.example.com/users/Admin@manufacturer.example.com/msp
-export CORE_PEER_ADDRESS=localhost:8051
-peer lifecycle chaincode approveformyorg -o localhost:7050 --channelID beerchannel --name beer --version 9.0 --package-id $PACKAGE_ID --sequence 1 2>/dev/null; echo "✓ Manufacturer approved"
-
-export CORE_PEER_LOCALMSPID=DistributorMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/distributor.example.com/users/Admin@distributor.example.com/msp
-export CORE_PEER_ADDRESS=localhost:9051
-peer lifecycle chaincode approveformyorg -o localhost:7050 --channelID beerchannel --name beer --version 9.0 --package-id $PACKAGE_ID --sequence 1 2>/dev/null; echo "✓ Distributor approved"
-
-export CORE_PEER_LOCALMSPID=RetailerMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/retailer.example.com/users/Admin@retailer.example.com/msp
-export CORE_PEER_ADDRESS=localhost:10051
-peer lifecycle chaincode approveformyorg -o localhost:7050 --channelID beerchannel --name beer --version 9.0 --package-id $PACKAGE_ID --sequence 1 2>/dev/null; echo "✓ Retailer approved"
-
-# Commit
-export CORE_PEER_LOCALMSPID=ManufacturerMSP
-export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/manufacturer.example.com/users/Admin@manufacturer.example.com/msp
-export CORE_PEER_ADDRESS=localhost:8051
-peer lifecycle chaincode commit -o localhost:7050 --channelID beerchannel --name beer --version 9.0 --sequence 1 --peerAddresses localhost:7051 --peerAddresses localhost:8051 --peerAddresses localhost:9051 --peerAddresses localhost:10051 2>/dev/null
-echo "✓ Chaincode committed!"
+run_manufacturer lifecycle chaincode commit \
+  -o localhost:7050 \
+  --channelID "$CHANNEL_NAME" \
+  --name "$CHAINCODE_NAME" \
+  --version "$CHAINCODE_VERSION" \
+  --sequence "$CHAINCODE_SEQUENCE" \
+  --peerAddresses localhost:7051 \
+  --peerAddresses localhost:8051 \
+  --peerAddresses localhost:9051 \
+  --peerAddresses localhost:10051 || true
+echo "Chaincode committed"
 
 echo ""
-echo "🍺 Network is ready!"
-echo "✓ Start backend: cd ~/Desktop/bralirwa-scm/beer-backend && npm run dev"
-echo "✓ Start frontend: cd ~/Desktop/bralirwa-scm/beer-frontend && npm run dev"
+echo "Network is ready"
+echo "Start backend: cd ~/web3-scm/beer-backend && npm run dev"
+echo "Start frontend: cd ~/web3-scm/beer-frontend && npm run dev"
