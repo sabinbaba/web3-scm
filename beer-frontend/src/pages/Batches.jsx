@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getBatches, createBatch, transferBatch, recordSale, getParticipants, getBatchHistory } from '../services/api';
+import { getBatches, createBatch, splitBatch, transferBatch, recordSale, getParticipants, getBatchHistory } from '../services/api';
 import toast from 'react-hot-toast';
 import { Plus, ArrowRight, ShoppingCart, History, X, Trash2, Beer } from 'lucide-react';
 
@@ -90,6 +90,7 @@ export default function Batches() {
   ]);
 
   const [transferTo, setTransferTo] = useState('');
+  const [transferQty, setTransferQty] = useState('');
   const [saleQty, setSaleQty] = useState('');
 
   const fetchData = async () => {
@@ -121,6 +122,25 @@ export default function Batches() {
     const updated = [...ingredients];
     updated[index][field] = value;
     setIngredients(updated);
+  };
+
+  const generateSplitBatchId = (sourceBatchId) => {
+    const stamp = Date.now().toString(36).toUpperCase();
+    return `${sourceBatchId}-S-${stamp}`;
+  };
+
+  const openTransferModal = (batch) => {
+    setSelectedBatch(batch);
+    setTransferTo('');
+    setTransferQty(user.role === 'distributor' ? '' : String(batch.quantity || ''));
+    setShowTransferModal(true);
+  };
+
+  const closeTransferModal = () => {
+    setShowTransferModal(false);
+    setSelectedBatch(null);
+    setTransferTo('');
+    setTransferQty('');
   };
 
   const handleCreate = async (e) => {
@@ -170,10 +190,30 @@ export default function Batches() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await transferBatch(selectedBatch.batchId, transferTo);
-      toast.success('Batch transferred on blockchain!');
-      setShowTransferModal(false);
-      setTransferTo('');
+      if (user.role === 'distributor') {
+        const quantity = parseInt(transferQty, 10);
+        if (Number.isNaN(quantity) || quantity <= 0) {
+          toast.error('Enter a positive quantity to transfer.');
+          return;
+        }
+        if (quantity > selectedBatch.quantity) {
+          toast.error(`Only ${selectedBatch.quantity} units are available.`);
+          return;
+        }
+
+        if (quantity === selectedBatch.quantity) {
+          await transferBatch(selectedBatch.batchId, transferTo);
+        } else {
+          const newBatchId = generateSplitBatchId(selectedBatch.batchId);
+          await splitBatch(selectedBatch.batchId, newBatchId, quantity);
+          await transferBatch(newBatchId, transferTo);
+        }
+      } else {
+        await transferBatch(selectedBatch.batchId, transferTo);
+      }
+
+      toast.success(user.role === 'distributor' ? 'Quantity transferred on blockchain!' : 'Batch transferred on blockchain!');
+      closeTransferModal();
       fetchData();
     } catch (err) {
       const raw = err.response?.data?.error || '';
@@ -329,7 +369,7 @@ export default function Batches() {
                       {(user.role === 'manufacturer' || user.role === 'distributor') &&
                         batch.currentLocation === user.role.toUpperCase() && batch.status !== 'SOLD_OUT' && (
                         <button
-                          onClick={() => { setSelectedBatch(batch); setShowTransferModal(true); }}
+                          onClick={() => openTransferModal(batch)}
                           className="icon-button text-violet-600 hover:bg-violet-50"
                           title="Transfer"
                         >
@@ -557,13 +597,20 @@ export default function Batches() {
         <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
             <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="font-semibold text-gray-800">Transfer Batch</h2>
-              <button onClick={() => setShowTransferModal(false)}><X size={20} /></button>
+              <h2 className="font-semibold text-gray-800">
+                {user.role === 'distributor' ? 'Transfer Quantity' : 'Transfer Batch'}
+              </h2>
+              <button onClick={closeTransferModal}><X size={20} /></button>
             </div>
             <form onSubmit={handleTransfer} className="p-6 space-y-4">
               <div className="bg-amber-50 rounded-lg p-3">
                 <p className="text-sm font-medium text-amber-700">{selectedBatch.batchId}</p>
                 <p className="text-sm text-amber-600">{selectedBatch.beerType} — {selectedBatch.quantity} units</p>
+                {user.role === 'distributor' && transferQty && (
+                  <p className="text-xs text-amber-500 mt-1">
+                    Remaining after transfer: {Math.max(selectedBatch.quantity - (parseInt(transferQty, 10) || 0), 0)} units
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Transfer To</label>
@@ -581,12 +628,26 @@ export default function Batches() {
                   ))}
                 </select>
               </div>
+              {user.role === 'distributor' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity to Transfer</label>
+                  <input
+                    type="number"
+                    value={transferQty}
+                    onChange={e => setTransferQty(e.target.value)}
+                    min="1"
+                    max={selectedBatch.quantity}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={submitting}
                 className="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg font-medium transition disabled:opacity-50"
               >
-                {submitting ? 'Transferring...' : 'Transfer Batch'}
+                {submitting ? 'Transferring...' : user.role === 'distributor' ? 'Transfer Quantity' : 'Transfer Batch'}
               </button>
             </form>
           </div>

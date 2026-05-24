@@ -37,6 +37,7 @@ export default function Transfers() {
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [transferTo, setTransferTo] = useState('');
   const [transferAllocations, setTransferAllocations] = useState([{ toParticipantId: '', quantity: '' }]);
+  const [progressFilter, setProgressFilter] = useState('all');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchData = async () => {
@@ -160,6 +161,21 @@ export default function Transfers() {
 
   const visibleBatches = batches.filter(isAssignedToUser);
 
+  const getBatchRelation = (batch) => {
+    const actions = (batch.actionHistory || []).filter(a => a.action === 'TRANSFERRED');
+    if (batch.currentOwnerId === user.participantId) return 'received';
+    if (user.participantId && actions.some(a => a.from === user.participantId)) return 'transferred';
+    if (user.participantId && actions.some(a => a.to === user.participantId)) return 'received';
+    return 'primary';
+  };
+
+  const progressBatches = visibleBatches.filter(batch => {
+    const hasTransfer = (batch.actionHistory || []).some(a => a.action === 'TRANSFERRED');
+    if (!hasTransfer) return false;
+    if (progressFilter === 'all') return true;
+    return getBatchRelation(batch) === progressFilter;
+  });
+
   // Only show batches assigned to the current participant that can be transferred
   const myBatches = visibleBatches.filter(b =>
     b.currentLocation === user.role.toUpperCase() &&
@@ -268,21 +284,40 @@ export default function Transfers() {
 
       {/* Transfer Progress Steppers by Batch */}
       <div className="panel">
-        <div className="px-5 py-4 border-b border-gray-200">
+        <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
             <Clock size={18} className="text-sky-600" />
             Transfer Progress by Batch
           </h2>
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 text-sm">
+            {[
+              { value: 'all', label: 'All' },
+              { value: 'received', label: 'Received' },
+              { value: 'transferred', label: 'Transferred' },
+            ].map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setProgressFilter(option.value)}
+                className={`px-3 py-1.5 rounded-md font-medium transition ${
+                  progressFilter === option.value
+                    ? 'bg-violet-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="p-5">
-          {visibleBatches.length === 0 ? (
+          {progressBatches.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-6">No batches found</p>
           ) : (
             <div className="space-y-8">
-              {[...visibleBatches].reverse().map(batch => {
+              {[...progressBatches].reverse().map(batch => {
                 // Build the transfer chain for this batch
                 const actions = (batch.actionHistory || []).filter(a => a.action === 'TRANSFERRED');
-                if (actions.length === 0) return null;
                 // Build participant chain: start with initial owner, then each transfer's 'to'
                 const createdAction = (batch.actionHistory || []).find(a => a.action === 'CREATED');
                 const manufacturer = getParticipant(batch.manufacturerId);
@@ -312,15 +347,62 @@ export default function Transfers() {
                 // Calculate total sold for this batch
                 const sales = (batch.actionHistory || []).filter(a => a.action === 'SALE_RECORDED');
                 const totalSold = sales.reduce((sum, s) => sum + (s.quantitySold || 0), 0);
+                const splitFromAction = (batch.actionHistory || []).find(a => a.action === 'SPLIT_FROM');
+                const splitOutActions = (batch.actionHistory || []).filter(a => a.action === 'SPLIT_OUT');
+                const totalSplitOut = splitOutActions.reduce((sum, split) => sum + (split.splitQuantity || 0), 0);
+                const childQuantity = splitFromAction?.splitQuantity || null;
+                const isPrimaryBatch = !batch.parentBatchId && !batch.sourceBatchId && !childQuantity;
+                const totalQuantity = childQuantity || batch.originalQuantity || batch.quantity + totalSold + totalSplitOut;
                 const remaining = batch.quantity;
+                const relation = getBatchRelation(batch);
+                const relationLabel = relation === 'received'
+                  ? 'Received'
+                  : relation === 'transferred'
+                    ? 'Transferred'
+                    : isPrimaryBatch
+                      ? 'Primary'
+                      : '';
+                const progressBorder = relationLabel === 'Received'
+                  ? 'border border-emerald-200'
+                  : relationLabel === 'Transferred'
+                    ? 'border border-violet-200'
+                    : isPrimaryBatch
+                      ? 'border border-amber-200'
+                      : 'border border-gray-100';
+                const relationBadgeClass = relationLabel === 'Received'
+                  ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                  : relationLabel === 'Transferred'
+                    ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-200'
+                    : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200';
                 return (
-                  <div key={batch.batchId} className="bg-gray-50 rounded-lg p-4 shadow-sm">
+                  <div key={batch.batchId} className={`bg-gray-50 rounded-lg p-4 shadow-sm ${progressBorder}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-amber-600">{batch.batchId}</span>
-                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${STATUS_COLORS[batch.status]}`}>{batch.status}</span>
+                      <span className="font-semibold text-amber-600 inline-flex items-center gap-2">
+                        {isPrimaryBatch && (
+                          <Package size={15} className="text-amber-600" aria-label="Primary batch" />
+                        )}
+                        {batch.batchId}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {relationLabel && (
+                          <span className={`px-2 py-1 rounded-md text-xs font-medium ${relationBadgeClass}`}>
+                            {relationLabel}
+                          </span>
+                        )}
+                        <span className={`px-2 py-1 rounded-md text-xs font-medium ${STATUS_COLORS[batch.status]}`}>{batch.status}</span>
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3">{batch.beerType} — {remaining} units remaining</p>
+                    <p className="text-sm text-gray-600 mb-3">
+                      {batch.beerType} — {totalQuantity} total units
+                    </p>
                     <div className="flex gap-4 mb-2 text-xs text-gray-500">
+                      <span>Total Quantity: <b className="text-sky-700">{totalQuantity}</b></span>
+                      {childQuantity && (
+                        <span>Child Quantity: <b className="text-violet-700">{childQuantity}</b></span>
+                      )}
+                      {totalSplitOut > 0 && !childQuantity && (
+                        <span>Sub Batch Distributed Quantity: <b className="text-violet-700">{totalSplitOut}</b></span>
+                      )}
                       <span>Quantity Sold: <b className="text-emerald-700">{totalSold}</b></span>
                       <span>Quantity Remaining: <b className="text-amber-700">{remaining}</b></span>
                     </div>

@@ -27,6 +27,13 @@ const MSP_ROLE_MAP = {
   RetailerMSP:     ROLES.RETAILER,
 };
 
+const ROLE_MSP_MAP = {
+  supplier:     'SupplierMSP',
+  manufacturer: 'ManufacturerMSP',
+  distributor:  'DistributorMSP',
+  retailer:     'RetailerMSP',
+};
+
 // Removed duplicate declaration of RWANDA_DISTRICTS
 
 function getTxTimestamp(ctx) {
@@ -111,7 +118,8 @@ class BeerSupplyChain extends Contract {
       }
     }
 
-    const mspId = this._getMSP(ctx);
+    const normalizedRole = role.toLowerCase();
+    const mspId = ROLE_MSP_MAP[normalizedRole] || this._getMSP(ctx);
 
     // District validation for distributors
     let assignedDistrict = district || '';
@@ -138,7 +146,7 @@ class BeerSupplyChain extends Contract {
       docType:      'participant',
       participantId,
       name,
-      role:         role.toLowerCase(),
+      role:         normalizedRole,
       mspId,
       contactInfo,
       district:     district || null,
@@ -266,18 +274,18 @@ class BeerSupplyChain extends Contract {
 
     const sourceKey = this._batchKey(ctx, sourceBatchId);
     const source = await this._getState(ctx, sourceKey, 'Source batch');
+    const performedBy = this._parseUser(performedByJson);
 
     if (source.currentLocation !== role.toUpperCase()) {
       throw new Error(`Batch '${sourceBatchId}' is not at your location`);
     }
-    if (source.mspId !== msp) {
+    if (source.mspId !== msp && source.currentOwnerId !== performedBy?.participantId) {
       throw new Error(`Batch '${sourceBatchId}' does not belong to your organization`);
     }
     if (source.quantity < qty) {
       throw new Error(`Insufficient stock: available ${source.quantity}, requested ${qty}`);
     }
 
-    const performedBy = this._parseUser(performedByJson);
     if (performedBy?.participantId && source.currentOwnerId !== performedBy.participantId) {
       throw new Error(`Only the current receiving participant '${source.currentOwnerId}' can split this batch`);
     }
