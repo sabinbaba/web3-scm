@@ -148,8 +148,20 @@ export default function Transfers() {
     }
   };
 
-  // Only show batches owned by current org that can be transferred
-  const myBatches = batches.filter(b =>
+  const isAssignedToUser = (batch) => {
+    if (!['distributor', 'retailer'].includes(user.role) || !user.participantId) return true;
+    if (batch.currentOwnerId === user.participantId) return true;
+    return (batch.actionHistory || []).some(action =>
+      action.from === user.participantId ||
+      action.to === user.participantId ||
+      action.performedBy?.participantId === user.participantId
+    );
+  };
+
+  const visibleBatches = batches.filter(isAssignedToUser);
+
+  // Only show batches assigned to the current participant that can be transferred
+  const myBatches = visibleBatches.filter(b =>
     b.currentLocation === user.role.toUpperCase() &&
     b.status !== 'SOLD_OUT' &&
     b.status !== 'SPLIT_OUT' &&
@@ -263,11 +275,11 @@ export default function Transfers() {
           </h2>
         </div>
         <div className="p-5">
-          {batches.length === 0 ? (
+          {visibleBatches.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-6">No batches found</p>
           ) : (
             <div className="space-y-8">
-              {[...batches].reverse().map(batch => {
+              {[...visibleBatches].reverse().map(batch => {
                 // Build the transfer chain for this batch
                 const actions = (batch.actionHistory || []).filter(a => a.action === 'TRANSFERRED');
                 if (actions.length === 0) return null;

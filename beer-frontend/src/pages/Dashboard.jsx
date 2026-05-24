@@ -34,11 +34,12 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-function StatCard({ icon: Icon, label, value, color }) {
+function StatCard({ icon, label, value, color }) {
+  const IconComponent = icon;
   return (
     <div className="panel p-5 flex items-center gap-4">
       <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${color}`}>
-        <Icon size={22} />
+        <IconComponent size={22} />
       </div>
       <div className="min-w-0">
         <p className="text-sm text-gray-500 truncate">{label}</p>
@@ -63,7 +64,7 @@ export default function Dashboard() {
         ]);
         setBatches(batchRes.data.data || []);
         setParticipants(participantRes.data.data || []);
-      } catch (err) {
+      } catch {
         setError('Failed to load data from blockchain');
       } finally {
         setLoading(false);
@@ -72,8 +73,19 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
-  const totalQuantity = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-  const inTransit = batches.filter(b => b.status === 'IN_TRANSIT').length;
+  const isAssignedToUser = (batch) => {
+    if (!['distributor', 'retailer'].includes(user.role) || !user.participantId) return true;
+    if (batch.currentOwnerId === user.participantId) return true;
+    return (batch.actionHistory || []).some(action =>
+      action.from === user.participantId ||
+      action.to === user.participantId ||
+      action.performedBy?.participantId === user.participantId
+    );
+  };
+
+  const visibleBatches = batches.filter(isAssignedToUser);
+  const totalQuantity = visibleBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+  const inTransit = visibleBatches.filter(b => b.status === 'IN_TRANSIT').length;
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -112,7 +124,7 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Package}    label="Total Batches" value={batches.length}     color="bg-amber-50 text-amber-700" />
+        <StatCard icon={Package}    label="Total Batches" value={visibleBatches.length}     color="bg-amber-50 text-amber-700" />
         <StatCard icon={TrendingUp} label="Total Units"   value={totalQuantity}       color="bg-sky-50 text-sky-700" />
         <StatCard icon={Package}    label="In Transit"    value={inTransit}           color="bg-yellow-50 text-yellow-700" />
         <StatCard icon={Users}      label="Participants"  value={participants.length} color="bg-emerald-50 text-emerald-700" />
@@ -136,9 +148,9 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {batches.length === 0 ? (
+              {visibleBatches.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-10 text-sm text-gray-500">No batches found</td></tr>
-              ) : batches.slice(0, 5).map((batch) => (
+              ) : visibleBatches.slice(0, 5).map((batch) => (
                 <tr key={batch.batchId} className="hover:bg-gray-50">
                   <td className="table-cell font-semibold text-amber-700">{batch.batchId}</td>
                   <td className="table-cell">{batch.beerType}</td>

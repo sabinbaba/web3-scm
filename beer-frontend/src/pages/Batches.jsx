@@ -97,14 +97,17 @@ export default function Batches() {
       const [batchRes, partRes] = await Promise.all([getBatches(), getParticipants()]);
       setBatches(batchRes.data.data || []);
       setParticipants(partRes.data.data || []);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData();
+  }, []);
 
   const addIngredient = () => {
     setIngredients([...ingredients, { name: 'Barley', amount: '', unit: 'kg' }]);
@@ -222,10 +225,22 @@ export default function Batches() {
       const res = await getBatchHistory(batch.batchId);
       setHistory(res.data.data || []);
       setShowHistoryModal(true);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load history');
     }
   };
+
+  const isAssignedToUser = (batch) => {
+    if (!['distributor', 'retailer'].includes(user.role) || !user.participantId) return true;
+    if (batch.currentOwnerId === user.participantId) return true;
+    return (batch.actionHistory || []).some(action =>
+      action.from === user.participantId ||
+      action.to === user.participantId ||
+      action.performedBy?.participantId === user.participantId
+    );
+  };
+
+  const visibleBatches = batches.filter(isAssignedToUser);
 
   // Manufacturer participants for dropdown
   const manufacturerParticipants = participants.filter(p => p.role === 'manufacturer');
@@ -289,9 +304,9 @@ export default function Batches() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {batches.length === 0 ? (
+              {visibleBatches.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-10 text-sm text-gray-500">No batches found</td></tr>
-              ) : batches.map((batch) => (
+              ) : visibleBatches.map((batch) => (
                 <tr key={batch.batchId} className="hover:bg-gray-50">
                   <td className="table-cell font-semibold text-amber-700">{batch.batchId}</td>
                   <td className="table-cell">{batch.beerType}</td>

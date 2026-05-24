@@ -7,12 +7,25 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
+function isVisibleToParticipant(batch, participantId) {
+  if (batch.currentOwnerId === participantId) return true;
+
+  return (batch.actionHistory || []).some(action =>
+    action.from === participantId ||
+    action.to === participantId ||
+    action.performedBy?.participantId === participantId
+  );
+}
+
 // GET /api/batches
 router.get('/', async (req, res) => {
   try {
-    const { mspId } = req.user;
+    const { mspId, role, participantId } = req.user;
     const batches = await queryChaincode(mspId, 'ListBatches', []);
-    return res.status(200).json({ success: true, data: batches });
+    const assignedBatches = (role === 'distributor' || role === 'retailer') && participantId
+      ? batches.filter(batch => isVisibleToParticipant(batch, participantId))
+      : batches;
+    return res.status(200).json({ success: true, data: assignedBatches });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -21,9 +34,12 @@ router.get('/', async (req, res) => {
 // GET /api/batches/my
 router.get('/my', async (req, res) => {
   try {
-    const { mspId } = req.user;
+    const { mspId, role, participantId } = req.user;
     const batches = await queryChaincode(mspId, 'ListBatchesByOwner', []);
-    return res.status(200).json({ success: true, data: batches });
+    const assignedBatches = (role === 'distributor' || role === 'retailer') && participantId
+      ? batches.filter(batch => isVisibleToParticipant(batch, participantId))
+      : batches;
+    return res.status(200).json({ success: true, data: assignedBatches });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
