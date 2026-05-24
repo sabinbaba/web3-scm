@@ -26,7 +26,7 @@ export default function Participants() {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
-    participantId: '', name: '', role: 'manufacturer', contactInfo: '', district: ''
+    participantId: '', name: '', role: '', contactInfo: '', district: ''
   });
 
   // Only Manufacturer Admin can register participants
@@ -36,14 +36,17 @@ export default function Participants() {
     try {
       const res = await getParticipants();
       setParticipants(res.data.data || []);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load participants');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchParticipants(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchParticipants();
+  }, []);
 
   const needsDistrict = form.role === 'distributor' || form.role === 'retailer';
 
@@ -85,7 +88,7 @@ export default function Participants() {
       await registerParticipant(form);
       toast.success('Participant registered on blockchain!');
       setShowModal(false);
-      setForm({ participantId: '', name: '', role: 'manufacturer', contactInfo: '', district: '' });
+      setForm({ participantId: '', name: '', role: '', contactInfo: '', district: '' });
       fetchParticipants();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to register participant');
@@ -163,19 +166,35 @@ export default function Participants() {
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select
+                  value={form.role}
+                  onChange={e => setForm({ ...form, role: e.target.value, district: '', participantId: '' })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="">Select role first</option>
+                  <option value="supplier">Supplier</option>
+                  <option value="manufacturer">Manufacturer</option>
+                  <option value="distributor">Distributor</option>
+                  <option value="retailer">Retailer</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Participant ID</label>
                 <select
                   value={form.participantId}
                   onChange={e => setForm({ ...form, participantId: e.target.value })}
                   required
+                  disabled={!form.role}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 >
-                  <option value="">Select ID</option>
-                  {generateNextParticipantIds(form.role).map(id => (
+                  <option value="">{form.role ? 'Select ID' : 'Choose role first'}</option>
+                  {form.role && generateNextParticipantIds(form.role).map(id => (
                     <option key={id} value={id}>{id}</option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-400 mt-1">Auto-generated based on existing participants</p>
+                <p className="text-xs text-gray-400 mt-1">Auto-generated after selecting a role</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -187,19 +206,6 @@ export default function Participants() {
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select
-                  value={form.role}
-                  onChange={e => setForm({ ...form, role: e.target.value, district: '', participantId: '' })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                >
-                  <option value="supplier">Supplier</option>
-                  <option value="manufacturer">Manufacturer</option>
-                  <option value="distributor">Distributor</option>
-                  <option value="retailer">Retailer</option>
-                </select>
               </div>
 
               {/* District — required for distributor AND retailer */}

@@ -26,7 +26,7 @@ const FABRIC_CONNECTION_MODE = process.env.FABRIC_CONNECTION_MODE || 'local';
 
 function fabricAddress(hostname, localPort) {
   if (FABRIC_CONNECTION_MODE === 'docker') {
-    return `${hostname}:7051`;
+    return `${hostname}:${localPort}`;
   }
 
   return `localhost:${localPort}`;

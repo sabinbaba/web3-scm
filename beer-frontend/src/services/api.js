@@ -67,6 +67,9 @@ export const createBatch = (data) =>
 export const transferBatch = (batchId, toParticipantId) =>
   api.post(`/batches/${batchId}/transfer`, { toParticipantId });
 
+export const splitBatch = (batchId, newBatchId, quantity) =>
+  api.post(`/batches/${batchId}/split`, { newBatchId, quantity });
+
 export const recordSale = (batchId, quantitySold, saleInfo) =>
   api.post(`/batches/${batchId}/sale`, { quantitySold, saleInfo });
 

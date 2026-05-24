@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getBatches, getParticipants, transferBatch } from '../services/api';
+import { getBatches, getParticipants, splitBatch, transferBatch } from '../services/api';
 import toast from 'react-hot-toast';
-import { ArrowRight, X, CheckCircle, Clock, Package, Beer, UserRound } from 'lucide-react';
+import { ArrowRight, X, Clock, Package, Beer, UserRound, Plus, Trash2 } from 'lucide-react';
 
 const STATUS_COLORS = {
   PRODUCED:       'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
   IN_TRANSIT:     'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+  SPLIT:          'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
+  SPLIT_OUT:      'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
   PARTIALLY_SOLD: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
   SOLD_OUT:       'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
 };
@@ -17,15 +19,6 @@ function formatDateTime(dateStr) {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
-}
-
-function timeAgo(dateStr) {
-  if (!dateStr) return '';
-  const diff = Math.floor((new Date() - new Date(dateStr)) / 1000);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 const ROLE_COLORS = {
@@ -43,6 +36,7 @@ export default function Transfers() {
   const [showModal, setShowModal] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [transferTo, setTransferTo] = useState('');
+  const [transferAllocations, setTransferAllocations] = useState([{ toParticipantId: '', quantity: '' }]);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchData = async () => {
@@ -53,24 +47,87 @@ export default function Transfers() {
       ]);
       setBatches(batchRes.data.data || []);
       setParticipants(partRes.data.data || []);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData();
+  }, []);
+
+  const openTransferModal = (batch) => {
+    setSelectedBatch(batch);
+    setTransferTo('');
+    setTransferAllocations([{ toParticipantId: '', quantity: String(batch.quantity || '') }]);
+    setShowModal(true);
+  };
+
+  const closeTransferModal = () => {
+    setShowModal(false);
+    setTransferTo('');
+    setTransferAllocations([{ toParticipantId: '', quantity: '' }]);
+    setSelectedBatch(null);
+  };
+
+  const getParticipant = (participantId) =>
+    participants.find(p => p.participantId === participantId);
+
+  const getParticipantName = (participantId, fallback = '-') => {
+    const participant = getParticipant(participantId);
+    return participant ? `${participant.name} (${participant.participantId})` : (participantId || fallback);
+  };
+
+  const generateSplitBatchId = (sourceBatchId, index) => {
+    const stamp = Date.now().toString(36).toUpperCase();
+    return `${sourceBatchId}-S${index + 1}-${stamp}`;
+  };
 
   const handleTransfer = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await transferBatch(selectedBatch.batchId, transferTo);
-      toast.success('Batch transferred on blockchain!');
-      setShowModal(false);
-      setTransferTo('');
-      setSelectedBatch(null);
+      if (user.role === 'distributor') {
+        const allocations = transferAllocations.map(a => ({
+          toParticipantId: a.toParticipantId,
+          quantity: parseInt(a.quantity, 10),
+        }));
+
+        if (allocations.some(a => !a.toParticipantId || Number.isNaN(a.quantity) || a.quantity <= 0)) {
+          toast.error('Select a retailer and positive quantity for every split.');
+          return;
+        }
+
+        const retailerIds = allocations.map(a => a.toParticipantId);
+        if (new Set(retailerIds).size !== retailerIds.length) {
+          toast.error('Use each retailer once. Combine quantities for the same retailer.');
+          return;
+        }
+
+        const totalQuantity = allocations.reduce((sum, a) => sum + a.quantity, 0);
+        if (totalQuantity > selectedBatch.quantity) {
+          toast.error(`You only have ${selectedBatch.quantity} units available.`);
+          return;
+        }
+
+        if (allocations.length === 1 && totalQuantity === selectedBatch.quantity) {
+          await transferBatch(selectedBatch.batchId, allocations[0].toParticipantId);
+        } else {
+          for (const [index, allocation] of allocations.entries()) {
+            const newBatchId = generateSplitBatchId(selectedBatch.batchId, index);
+            await splitBatch(selectedBatch.batchId, newBatchId, allocation.quantity);
+            await transferBatch(newBatchId, allocation.toParticipantId);
+          }
+        }
+      } else {
+        await transferBatch(selectedBatch.batchId, transferTo);
+      }
+
+      toast.success(user.role === 'distributor' ? 'Batch distributed on blockchain!' : 'Batch transferred on blockchain!');
+      closeTransferModal();
       fetchData();
     } catch (err) {
       const raw = err.response?.data?.error || '';
@@ -93,22 +150,44 @@ export default function Transfers() {
 
   // Only show batches owned by current org that can be transferred
   const myBatches = batches.filter(b =>
-    b.currentLocation === user.role.toUpperCase() && b.status !== 'SOLD_OUT'
+    b.currentLocation === user.role.toUpperCase() &&
+    b.status !== 'SOLD_OUT' &&
+    b.status !== 'SPLIT_OUT' &&
+    Number(b.quantity) > 0
   );
-
-  // All transfer actions across all batches
-  const allTransfers = batches.flatMap(b =>
-    (b.actionHistory || [])
-      .filter(a => a.action === 'TRANSFERRED')
-      .map(a => ({ ...a, batchId: b.batchId, beerType: b.beerType }))
-  ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   // Filter participants for transfer target
   const transferTargets = participants.filter(p => {
     if (user.role === 'manufacturer') return p.role === 'distributor';
-    if (user.role === 'distributor') return p.role === 'retailer';
+    if (user.role === 'distributor') {
+      if (p.role !== 'retailer') return false;
+      if (user.participantId) {
+        const myParticipant = participants.find(pt => pt.participantId === user.participantId);
+        if (myParticipant?.district && p.district) return myParticipant.district === p.district;
+      }
+      return true;
+    }
     return false;
   });
+
+  const updateAllocation = (index, field, value) => {
+    setTransferAllocations(current => current.map((allocation, idx) =>
+      idx === index ? { ...allocation, [field]: value } : allocation
+    ));
+  };
+
+  const addAllocation = () => {
+    setTransferAllocations(current => [...current, { toParticipantId: '', quantity: '' }]);
+  };
+
+  const removeAllocation = (index) => {
+    setTransferAllocations(current => current.filter((_, idx) => idx !== index));
+  };
+
+  const allocatedQuantity = transferAllocations.reduce((sum, allocation) => {
+    const qty = parseInt(allocation.quantity, 10);
+    return sum + (Number.isNaN(qty) ? 0 : qty);
+  }, 0);
 
   const canTransfer = user.role === 'manufacturer' || user.role === 'distributor';
 
@@ -161,11 +240,11 @@ export default function Transfers() {
                       <p>Owner: <span className="font-medium text-gray-700">{batch.currentOwnerId}</span></p>
                     </div>
                     <button
-                      onClick={() => { setSelectedBatch(batch); setShowModal(true); }}
+                      onClick={() => openTransferModal(batch)}
                       className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 text-white py-2 rounded-lg text-sm font-medium transition"
                     >
                       <ArrowRight size={16} />
-                      Transfer Batch
+                      {user.role === 'distributor' ? 'Distribute Batch' : 'Transfer Batch'}
                     </button>
                   </div>
                 ))}
@@ -188,19 +267,30 @@ export default function Transfers() {
             <p className="text-gray-500 text-sm text-center py-6">No batches found</p>
           ) : (
             <div className="space-y-8">
-              {batches.map(batch => {
+              {[...batches].reverse().map(batch => {
                 // Build the transfer chain for this batch
                 const actions = (batch.actionHistory || []).filter(a => a.action === 'TRANSFERRED');
                 if (actions.length === 0) return null;
                 // Build participant chain: start with initial owner, then each transfer's 'to'
+                const createdAction = (batch.actionHistory || []).find(a => a.action === 'CREATED');
+                const manufacturer = getParticipant(batch.manufacturerId);
                 const participantChain = [
-                  { name: batch.createdBy?.name || batch.currentOwnerId, role: batch.createdBy?.role || batch.currentLocation, mspId: batch.createdBy?.mspId || '', time: batch.createdAt, isCurrent: false }
+                  {
+                    name: manufacturer?.name || createdAction?.performedBy?.name || batch.manufacturerId,
+                    participantId: batch.manufacturerId,
+                    role: manufacturer?.role || 'manufacturer',
+                    mspId: manufacturer?.mspId || batch.mspId || '',
+                    time: batch.createdAt,
+                    isCurrent: false,
+                  }
                 ];
                 actions.forEach((a, idx) => {
+                  const toParticipant = getParticipant(a.to);
                   participantChain.push({
-                    name: a.toName || a.to || a.toMspId,
-                    role: a.toRole || a.toMspId?.replace('MSP','').toLowerCase() || '',
-                    mspId: a.toMspId || '',
+                    name: toParticipant?.name || a.toName || a.to || a.toMspId,
+                    participantId: a.to,
+                    role: toParticipant?.role || a.toRole || a.toMspId?.replace('MSP','').toLowerCase() || '',
+                    mspId: toParticipant?.mspId || a.toMspId || '',
                     time: a.timestamp,
                     isCurrent: idx === actions.length - 1 && batch.status !== 'SOLD_OUT',
                   });
@@ -230,7 +320,7 @@ export default function Transfers() {
                             <div className={`rounded-full w-10 h-10 flex items-center justify-center mb-1 ring-2 ${p.isCurrent ? 'ring-violet-400 bg-violet-50' : 'ring-gray-200 bg-white'}`}>
                               <UserRound size={20} />
                             </div>
-                            <span className="text-xs truncate max-w-[80px]">{p.name}</span>
+                            <span className="text-xs truncate max-w-[110px]" title={p.participantId}>{p.name}</span>
                             <span className={`text-[10px] mt-0.5 px-2 py-0.5 rounded-full ${ROLE_COLORS[p.role] || 'bg-gray-100 text-gray-600'}`}>{p.role}</span>
                             <span className="text-[10px] text-gray-400">{formatDateTime(p.time)}</span>
                           </div>
@@ -245,9 +335,9 @@ export default function Transfers() {
                       <div className="mt-4 text-xs text-gray-500">
                         <div className="flex flex-wrap gap-4 items-center">
                           <span>Last Transfer:</span>
-                          <span>From <b>{actions[actions.length-1].from}</b> ({actions[actions.length-1].fromMspId})</span>
+                          <span>From <b>{getParticipantName(actions[actions.length-1].from)}</b> ({actions[actions.length-1].fromMspId})</span>
                           <ArrowRight size={14} className="text-violet-400" />
-                          <span>To <b>{actions[actions.length-1].to}</b> ({actions[actions.length-1].toMspId})</span>
+                          <span>To <b>{getParticipantName(actions[actions.length-1].to)}</b> ({actions[actions.length-1].toMspId})</span>
                           <span>at {formatDateTime(actions[actions.length-1].timestamp)}</span>
                           {actions[actions.length-1].performedBy && (
                             <span>by <b>{actions[actions.length-1].performedBy.name}</b> ({actions[actions.length-1].performedBy.email})</span>
@@ -269,30 +359,95 @@ export default function Transfers() {
       {/* Transfer Modal */}
       {showModal && selectedBatch && (
         <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
             <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="font-semibold text-gray-800">Transfer Batch</h2>
-              <button onClick={() => { setShowModal(false); setTransferTo(''); }}><X size={20} /></button>
+              <h2 className="font-semibold text-gray-800">
+                {user.role === 'distributor' ? 'Distribute Batch' : 'Transfer Batch'}
+              </h2>
+              <button onClick={closeTransferModal}><X size={20} /></button>
             </div>
             <div className="p-6">
               {/* Batch info */}
               <div className="bg-amber-50 rounded-lg p-4 mb-4">
                 <p className="text-sm font-medium text-amber-700">{selectedBatch.batchId}</p>
                 <p className="text-sm text-amber-600">{selectedBatch.beerType} — {selectedBatch.quantity} units</p>
-                <p className="text-xs text-amber-500 mt-1">Currently at: {selectedBatch.currentLocation}</p>
+                <p className="text-xs text-amber-500 mt-1">
+                  Currently at: {selectedBatch.currentLocation} with {getParticipantName(selectedBatch.currentOwnerId)}
+                </p>
               </div>
 
               <form onSubmit={handleTransfer} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Transfer To {user.role === 'manufacturer' ? '(Distributor)' : '(Retailer)'}
-                  </label>
-                  {transferTargets.length === 0 ? (
-                    <p className="text-sm text-red-500 bg-red-50 p-3 rounded-lg">
-                      No {user.role === 'manufacturer' ? 'distributors' : 'retailers'} registered yet.
-                      Please register a participant first.
-                    </p>
-                  ) : (
+                {transferTargets.length === 0 ? (
+                  <p className="text-sm text-red-500 bg-red-50 p-3 rounded-lg">
+                    No {user.role === 'manufacturer' ? 'distributors' : 'retailers'} registered yet.
+                    Please register a participant first.
+                  </p>
+                ) : user.role === 'distributor' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Retailer allocations
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addAllocation}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-800"
+                      >
+                        <Plus size={14} />
+                        Add retailer
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {transferAllocations.map((allocation, index) => (
+                        <div key={index} className="grid grid-cols-[1fr_120px_36px] gap-2 items-center">
+                          <select
+                            value={allocation.toParticipantId}
+                            onChange={e => updateAllocation(index, 'toParticipantId', e.target.value)}
+                            required
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                          >
+                            <option value="">Select retailer</option>
+                            {transferTargets.map(p => (
+                              <option key={p.participantId} value={p.participantId}>
+                                {p.name} ({p.participantId}){p.district ? ` - ${p.district}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            min="1"
+                            max={selectedBatch.quantity}
+                            value={allocation.quantity}
+                            onChange={e => updateAllocation(index, 'quantity', e.target.value)}
+                            required
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeAllocation(index)}
+                            disabled={transferAllocations.length === 1}
+                            className="icon-button text-red-500 hover:bg-red-50 disabled:opacity-40"
+                            title="Remove allocation"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                      <span className="text-gray-500">Allocated</span>
+                      <span className={allocatedQuantity > selectedBatch.quantity ? 'font-semibold text-red-600' : 'font-semibold text-gray-700'}>
+                        {allocatedQuantity} / {selectedBatch.quantity} units
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Transfer To (Distributor)
+                    </label>
                     <select
                       value={transferTo}
                       onChange={e => setTransferTo(e.target.value)}
@@ -306,24 +461,36 @@ export default function Transfers() {
                         </option>
                       ))}
                     </select>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Arrow visualization */}
-                {transferTo && (
-                  <div className="flex items-center justify-center gap-3 py-2">
+                {(transferTo || transferAllocations.some(a => a.toParticipantId)) && (
+                  <div className="flex flex-wrap items-center justify-center gap-3 py-2">
                     <div className="text-center">
                       <p className="text-xs text-gray-400">From</p>
-                      <p className="text-sm font-medium text-gray-700">{selectedBatch.currentOwnerId}</p>
+                      <p className="text-sm font-medium text-gray-700">{getParticipantName(selectedBatch.currentOwnerId)}</p>
                       <p className="text-xs text-gray-400">{user.mspId}</p>
                     </div>
                     <ArrowRight size={20} className="text-purple-400" />
                     <div className="text-center">
                       <p className="text-xs text-gray-400">To</p>
-                      <p className="text-sm font-medium text-gray-700">{transferTo}</p>
-                      <p className="text-xs text-gray-400">
-                        {participants.find(p => p.participantId === transferTo)?.mspId}
-                      </p>
+                      {user.role === 'distributor' ? (
+                        <div className="space-y-1">
+                          {transferAllocations.filter(a => a.toParticipantId).map((allocation, index) => (
+                            <p key={`${allocation.toParticipantId}-${index}`} className="text-sm font-medium text-gray-700">
+                              {getParticipantName(allocation.toParticipantId)} ({allocation.quantity || 0})
+                            </p>
+                          ))}
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-gray-700">{getParticipantName(transferTo)}</p>
+                          <p className="text-xs text-gray-400">
+                            {participants.find(p => p.participantId === transferTo)?.mspId}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -333,7 +500,7 @@ export default function Transfers() {
                   disabled={submitting || transferTargets.length === 0}
                   className="w-full bg-violet-600 hover:bg-violet-700 text-white py-2 rounded-lg font-medium transition disabled:opacity-50"
                 >
-                  {submitting ? 'Transferring...' : 'Confirm Transfer'}
+                  {submitting ? 'Submitting...' : user.role === 'distributor' ? 'Confirm Distribution' : 'Confirm Transfer'}
                 </button>
               </form>
             </div>
