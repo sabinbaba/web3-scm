@@ -278,10 +278,7 @@ class BeerSupplyChain extends Contract {
     }
 
     const performedBy = this._parseUser(performedByJson);
-    if (!performedBy || !performedBy.participantId) {
-      throw new Error('A linked participant user is required to split a received batch');
-    }
-    if (source.currentOwnerId !== performedBy.participantId) {
+    if (performedBy?.participantId && source.currentOwnerId !== performedBy.participantId) {
       throw new Error(`Only the current receiving participant '${source.currentOwnerId}' can split this batch`);
     }
 
@@ -381,13 +378,18 @@ class BeerSupplyChain extends Contract {
     const now = getTxTimestamp(ctx);
 
     if (!batch.actionHistory) batch.actionHistory = [];
+    const fromPart = await this._getState(ctx, this._participantKey(ctx, batch.currentOwnerId), 'Sender participant');
     batch.actionHistory.push({
       action:      'TRANSFERRED',
       from:        batch.currentOwnerId,
+      fromName:    fromPart.name,
+      fromRole:    fromPart.role,
       fromMspId:   msp,
       to:          toParticipantId,
+      toName:      toPart.name,
+      toRole:      toPart.role,
       toMspId:     toPart.mspId,
-      fromDistrict: batch.currentLocation === 'DISTRIBUTOR' ? (await this._getState(ctx, this._participantKey(ctx, batch.currentOwnerId), 'from part')).district : null,
+      fromDistrict: batch.currentLocation === 'DISTRIBUTOR' ? fromPart.district : null,
       toDistrict:   toPart.district || null,
       performedBy,
       timestamp:   now,
